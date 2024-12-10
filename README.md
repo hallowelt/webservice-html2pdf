@@ -32,7 +32,7 @@ php test.php data/doc1/
 ## "bshtml2pdf" compatibility
 The old "bshtml2pdf" service ran servlets on a Tomcat server and hat `/BShtml2PDF` as the base URL. This service runs standalone and therefore lacks the `/BShtml2PDF` base URL. The client implementation must be adjusted accordingly.
 
-If that can not be done easily, one cas start the service with the `server.servlet.context-path` parameter:
+If that can not be done easily, one can start the service with the `server.servlet.context-path` parameter:
 
 ```bash
 java -jar \
