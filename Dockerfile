@@ -3,7 +3,7 @@ COPY . /usr/src/app
 WORKDIR /usr/src/app
 RUN mvn clean package
 
-FROM openjdk:21-jdk-slim
+FROM eclipse-temurin:21-jre-alpine
 COPY --from=build /usr/src/app/target/html2pdf-1.0.0-SNAPSHOT.jar /app/html2pdf.jar
 WORKDIR /app
 
