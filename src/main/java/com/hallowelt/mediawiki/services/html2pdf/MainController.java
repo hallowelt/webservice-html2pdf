@@ -124,6 +124,8 @@ public class MainController {
 				Parser.xmlParser() // Required as otherwise CDATA is not parsed correctly
 		);
 
+		this.sanitizeDocument(doc);
+
 		// Find all elements that have `data-fs-embed-file="true"`and convert to
 		// `download="..."`
 		// https://github.com/danfickle/openhtmltopdf/wiki/Embedding-downloadable-files#html
@@ -207,6 +209,35 @@ public class MainController {
 		}
 		return false;
 	}
+
+	/**
+     * Sanitizes the document by removing elements that breaking PDF rendering.
+     *
+     * @param doc The document to sanitize.
+     */
+	private void sanitizeDocument(org.jsoup.nodes.Document doc) {
+        Elements inputs = doc.select("input");
+        for (org.jsoup.nodes.Element input : inputs) {
+            logger.debug("Sanitize: replace element: " + input.toString());
+
+            org.jsoup.nodes.Element span = new org.jsoup.nodes.Element("span");
+
+            String value = input.attr("value");
+            if (!value.isEmpty()) {
+                span.text(value);
+            }
+
+            if (input.hasAttr("class")) {
+                span.attr("class", input.attr("class"));
+            }
+            if (input.hasAttr("style")) {
+                span.attr("style", input.attr("style"));
+            }
+
+            // Replace the input with the span
+            input.replaceWith(span);
+        }
+    }
 
 	private void deleteDirectory(File directroy) {
 		if (directroy.exists()) {
