@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.hallowelt.mediawiki.services</groupId>
 	<artifactId>html2pdf</artifactId>
-	<version>1.0.3-SNAPSHOT</version>
+	<version>1.0.4-SNAPSHOT</version>
 	<packaging>jar</packaging>
 	<name>html2pdf</name>
 	<description>PDF renderer service for MediaWiki</description>
