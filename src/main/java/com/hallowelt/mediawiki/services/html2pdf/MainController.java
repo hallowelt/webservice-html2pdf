@@ -25,6 +25,7 @@ import com.openhtmltopdf.outputdevice.helper.ExternalResourceControlPriority;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceType;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import com.openhtmltopdf.svgsupport.BatikSVGDrawer;
+import com.openhtmltopdf.extend.FSSupplier;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -58,7 +59,7 @@ public class MainController {
 		Map<String, Object> response = new HashMap<>();
 		response.put("success", true);
 		response.put("msg", "Service is running");
-		response.put( "version", "1.0.3");
+		response.put( "version", "1.0.4");
 		return response;
 	}
 
@@ -78,6 +79,9 @@ public class MainController {
 			File documentFile = new File(basePathFile, documentToken + ".html");
 
 			PdfRendererBuilder builder = new PdfRendererBuilder();
+
+            BaseFontMapping.registerFonts(builder);
+
 			builder.useFastMode();
 			builder.usePdfUaAccessibility(true);
 			builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_3_U);

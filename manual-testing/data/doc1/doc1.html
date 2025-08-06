@@ -1,4 +1,4 @@
-<html xmlns:bs="http://www.blue-spice.org/XML/Schema-2011-09">
+<html>
 	<head>
 		<title>SimplePage</title>
 		<link href="stylesheets/page.css" type="text/css" rel="stylesheet"/>
@@ -2546,24 +2546,175 @@ A more complex table
 </pre></div>
 <div class="mw-highlight mw-highlight-lang-shell mw-content-ltr" dir="ltr"><pre><span/>./doIt --when<span class="o">=</span>now &gt; /dev/null
 </pre></div>
-<!-- 
-NewPP limit report
-Cached time: 20240627143309
-Cache expiry: 86400
-Reduced expiry: false
-Complications: [show‐toc]
-[SMW] In‐text annotation parser time: 0.005 seconds
-CPU time usage: 0.231 seconds
-Real time usage: 0.250 seconds
-Preprocessor visited node count: 34/1000000
-Post‐expand include size: 0/2097152 bytes
-Template argument size: 0/2097152 bytes
-Highest expansion depth: 2/100
-Expensive parser function count: 0/100
-Unstrip recursion depth: 0/20
-Unstrip post‐expand size: 3112/5000000 bytes
-ExtLoops count: 0/100
--->
+			<h2><span class="mw-headline" id="4c224d96caecfb72894fdfd68980c5a3-Test_for_Base_14_Fonts"
+			          orig-id="Test_for_Base_14_Fonts"><span class="mw-headline-number">5 </span>Test for Base 14 Fonts</span>
+			</h2>
+			<p>In this table we test all 14 standard PDF fonts ("Base 14") for PDF export:
+			</p>
+			<table class="wikitable pdf-correct-table-width">
+				<thead>
+				<tr>
+					<th>Font
+					</th>
+					<th>Example Text
+					</th>
+				</tr>
+				</thead>
+				<tbody>
+				<tr>
+					<td>Times-Roman
+					</td>
+					<td><span style="font-family: Times;">The quick brown fox jumps over the lazy dog. 1234567890</span>
+					</td>
+				</tr>
+				<tr>
+					<td>Times-Bold
+					</td>
+					<td><span style="font-family: Times;"><b>The quick brown fox jumps over the lazy dog. 1234567890</b></span>
+					</td>
+				</tr>
+				<tr>
+					<td>Times-Italic
+					</td>
+					<td><span style="font-family: Times;"><i>The quick brown fox jumps over the lazy dog. 1234567890</i></span>
+					</td>
+				</tr>
+				<tr>
+					<td>Times-BoldItalic
+					</td>
+					<td><span
+							style="font-family: Times;"><i><b>The quick brown fox jumps over the lazy dog. 1234567890</b></i></span>
+					</td>
+				</tr>
+				<tr>
+					<td>Helvetica
+					</td>
+					<td><span
+							style="font-family: Helvetica;">The quick brown fox jumps over the lazy dog. 1234567890</span>
+					</td>
+				</tr>
+				<tr>
+					<td>Helvetica-Bold
+					</td>
+					<td><span
+							style="font-family: Helvetica;"><b>The quick brown fox jumps over the lazy dog. 1234567890</b></span>
+					</td>
+				</tr>
+				<tr>
+					<td>Helvetica-Oblique
+					</td>
+					<td><span
+							style="font-family: Helvetica;"><i>The quick brown fox jumps over the lazy dog. 1234567890</i></span>
+					</td>
+				</tr>
+				<tr>
+					<td>Helvetica-BoldOblique
+					</td>
+					<td><span style="font-family: Helvetica;"><i><b>The quick brown fox jumps over the lazy dog. 1234567890</b></i></span>
+					</td>
+				</tr>
+				<tr>
+					<td>Courier
+					</td>
+					<td><span
+							style="font-family: Courier;">The quick brown fox jumps over the lazy dog. 1234567890</span>
+					</td>
+				</tr>
+				<tr>
+					<td>Courier-Bold
+					</td>
+					<td><span
+							style="font-family: Courier;"><b>The quick brown fox jumps over the lazy dog. 1234567890</b></span>
+					</td>
+				</tr>
+				<tr>
+					<td>Courier-Oblique
+					</td>
+					<td><span
+							style="font-family: Courier;"><i>The quick brown fox jumps over the lazy dog. 1234567890</i></span>
+					</td>
+				</tr>
+				<tr>
+					<td>Courier-BoldOblique
+					</td>
+					<td><span style="font-family: Courier;"><i><b>The quick brown fox jumps over the lazy dog. 1234567890</b></i></span>
+					</td>
+				</tr>
+				<tr>
+					<td>Symbol
+					</td>
+					<td><span style="font-family: Symbol;">!@#$%^&amp;*() SYMBOL TEST αβγδεζηθ</span>
+					</td>
+				</tr>
+				<tr>
+					<td>ZapfDingbats
+					</td>
+					<td><span style="font-family: ZapfDingbats;">ZapfDingbats test: ✈ ✂ ✉ ☎</span>
+					</td>
+				</tr>
+				</tbody>
+			</table>
+			<h2><span class="mw-headline" id="4c224d96caecfb72894fdfd68980c5a3-Test_for_More_Fonts"
+			          orig-id="Test_for_More_Fonts"><span class="mw-headline-number">6 </span>Test for More Fonts</span>
+			</h2>
+			<p>In this table we test more fonts that might (not) work with PDF Export:
+			</p>
+			<table class="wikitable pdf-correct-table-width">
+				<thead>
+				<tr>
+					<th>Font
+					</th>
+					<th>Example Text
+					</th>
+				</tr>
+				</thead>
+				<tbody>
+				<tr>
+					<td>DejaVu Sans
+					</td>
+					<td><span
+							style="font-family: DejaVuSans;">The quick brown fox jumps over the lazy dog. 1234567890</span>
+					</td>
+				</tr>
+				<tr>
+					<td>DejaVu Sans Bold
+					</td>
+					<td><span style="font-family: DejaVuSans;"><b>The quick brown fox jumps over the lazy dog. 1234567890</b></span>
+					</td>
+				</tr>
+				<tr>
+					<td>DejaVu Sans Italic
+					</td>
+					<td><span style="font-family: DejaVuSans;"><i>The quick brown fox jumps over the lazy dog. 1234567890</i></span>
+					</td>
+				</tr>
+				<tr>
+					<td>DejaVu Sans BoldItalic
+					</td>
+					<td><span style="font-family: DejaVuSans;"><i><b>The quick brown fox jumps over the lazy dog. 1234567890</b></i></span>
+					</td>
+				</tr>
+				</tbody>
+			</table>
+		</div>
+			<!--
+			NewPP limit report
+			Cached time: 20240627143309
+			Cache expiry: 86400
+			Reduced expiry: false
+			Complications: [show‐toc]
+			[SMW] In‐text annotation parser time: 0.005 seconds
+			CPU time usage: 0.231 seconds
+			Real time usage: 0.250 seconds
+			Preprocessor visited node count: 34/1000000
+			Post‐expand include size: 0/2097152 bytes
+			Template argument size: 0/2097152 bytes
+			Highest expansion depth: 2/100
+			Expensive parser function count: 0/100
+			Unstrip recursion depth: 0/20
+			Unstrip post‐expand size: 3112/5000000 bytes
+			ExtLoops count: 0/100
+			-->
 <!--
 Transclusion expansion time report (%,ms,calls,template)
 100.00%    0.000      1 -total
