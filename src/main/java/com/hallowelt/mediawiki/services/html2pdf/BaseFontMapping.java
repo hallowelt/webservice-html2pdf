@@ -10,7 +10,7 @@ public class BaseFontMapping {
 
     public static final Map<String, String> BASE_14_TO_TTF = Map.ofEntries(
         // Times (Nimbus Roman)
-        Map.entry("Times",        "/fonts/NimbusRoman-Regular.ttf"),
+        Map.entry("Times",              "/fonts/NimbusRoman-Regular.ttf"),
         Map.entry("Times-Bold",         "/fonts/NimbusRoman-Bold.ttf"),
         Map.entry("Times-Italic",       "/fonts/NimbusRoman-Italic.ttf"),
         Map.entry("Times-BoldItalic",   "/fonts/NimbusRoman-BoldItalic.ttf"),
