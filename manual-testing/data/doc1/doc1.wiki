@@ -184,3 +184,75 @@ class Developer implements Awesomeness {
 <syntaxhighlight lang="shell">
 ./doIt --when=now > /dev/null
 </syntaxhighlight>
+
+== Test for Base 14 Fonts ==
+
+In this table we test all 14 standard PDF fonts ("Base 14") for PDF export:
+
+{| class="wikitable"
+! Font
+! Example Text
+|-
+| Times-Roman
+| <span style="font-family: Times;">The quick brown fox jumps over the lazy dog. 1234567890</span>
+|-
+| Times-Bold
+| <span style="font-family: Times;">'''The quick brown fox jumps over the lazy dog. 1234567890'''</span>
+|-
+| Times-Italic
+| <span style="font-family: Times;">''The quick brown fox jumps over the lazy dog. 1234567890''</span>
+|-
+| Times-BoldItalic
+| <span style="font-family: Times;">'''''The quick brown fox jumps over the lazy dog. 1234567890'''''</span>
+|-
+| Helvetica
+| <span style="font-family: Helvetica;">The quick brown fox jumps over the lazy dog. 1234567890</span>
+|-
+| Helvetica-Bold
+| <span style="font-family: Helvetica;">'''The quick brown fox jumps over the lazy dog. 1234567890'''</span>
+|-
+| Helvetica-Oblique
+| <span style="font-family: Helvetica;">''The quick brown fox jumps over the lazy dog. 1234567890''</span>
+|-
+| Helvetica-BoldOblique
+| <span style="font-family: Helvetica;">'''''The quick brown fox jumps over the lazy dog. 1234567890'''''</span>
+|-
+| Courier
+| <span style="font-family: Courier;">The quick brown fox jumps over the lazy dog. 1234567890</span>
+|-
+| Courier-Bold
+| <span style="font-family: Courier;">'''The quick brown fox jumps over the lazy dog. 1234567890'''</span>
+|-
+| Courier-Oblique
+| <span style="font-family: Courier;">''The quick brown fox jumps over the lazy dog. 1234567890''</span>
+|-
+| Courier-BoldOblique
+| <span style="font-family: Courier;">'''''The quick brown fox jumps over the lazy dog. 1234567890'''''</span>
+|-
+| Symbol
+| <span style="font-family: Symbol;">!@#$%^&amp;*() SYMBOL TEST αβγδεζηθ</span>
+|-
+| ZapfDingbats
+| <span style="font-family: ZapfDingbats;">ZapfDingbats test: ✈ ✂ ✉ ☎</span>
+|}
+
+== Test for More Fonts ==
+
+In this table we test more fonts that might (not) work with PDF Export:
+
+{| class="wikitable"
+! Font
+! Example Text
+|-
+| DejaVu Sans
+| <span style="font-family: DejaVuSans;">The quick brown fox jumps over the lazy dog. 1234567890</span>
+|-
+| DejaVu Sans Bold
+| <span style="font-family: DejaVuSans;">'''The quick brown fox jumps over the lazy dog. 1234567890'''</span>
+|-
+| DejaVu Sans Italic
+| <span style="font-family: DejaVuSans;">''The quick brown fox jumps over the lazy dog. 1234567890''</span>
+|-
+| DejaVu Sans BoldItalic
+| <span style="font-family: DejaVuSans;">'''''The quick brown fox jumps over the lazy dog. 1234567890'''''</span>
+|}
