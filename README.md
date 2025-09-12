@@ -20,6 +20,24 @@ Run the container with:
 ```
 docker run -p 8080:8080 webservice-htmlpdf
 ```
+## Included Fonts and Licenses
+
+This project includes the following open source fonts as replacements for the PDF base 14 fonts:
+
+| Font Family         | Font Files (TTF)                        | License                                    |
+|---------------------|------------------------------------------|---------------------------------------------|
+| Nimbus Roman        | NimbusRoman-Regular, -Bold, -Italic,     | GPL or AFPL (URW++)                        |
+|                     | -BoldItalic                              |                                             |
+| Nimbus Sans         | NimbusSans-Regular, -Bold, -Italic,      | GPL or AFPL (URW++)                        |
+|                     | -BoldItalic                              |                                             |
+| Nimbus Mono PS      | NimbusMonoPS-Regular, -Bold, -Italic,    | GPL or AFPL (URW++)                        |
+|                     | -BoldItalic                              |                                             |
+| Standard Symbols PS | StandardSymbolsPS                        | GPL or AFPL (URW++)                        |
+| D050000L            | D050000L                                 | LaTeX Project Public License (LPPL)         |
+
+Font sources: [URW++ Core 35 Fonts](https://github.com/ArtifexSoftware/urw-base35-fonts), [D050000L](https://ctan.org/pkg/d050000l)
+
+Please refer to the respective repositories for full license texts.
 
 ## Manual testing
 To test the service manually, run:
