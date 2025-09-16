@@ -59,7 +59,7 @@ public class MainController {
 		Map<String, Object> response = new HashMap<>();
 		response.put("success", true);
 		response.put("msg", "Service is running");
-		response.put( "version", "1.0.5");
+		response.put( "version", "1.0.6");
 		return response;
 	}
 
