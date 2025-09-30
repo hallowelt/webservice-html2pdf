@@ -8,134 +8,38 @@ import java.util.Map;
 
 public class BaseFontMapping {
 
-    // Map of all acceptable family names/aliases to the TTF path to load
-    private static final Map<String, String> FONT_ALIASES_TO_TTF;
+    public static final Map<String, String> BASE_14_TO_TTF = Map.ofEntries(
+        // Times (Nimbus Roman)
+        Map.entry("Times",              "/fonts/NimbusRoman-Regular.ttf"),
+        Map.entry("Times-Bold",         "/fonts/NimbusRoman-Bold.ttf"),
+        Map.entry("Times-Italic",       "/fonts/NimbusRoman-Italic.ttf"),
+        Map.entry("Times-BoldItalic",   "/fonts/NimbusRoman-BoldItalic.ttf"),
 
-    static {
-        java.util.Map<String, String> m = new java.util.LinkedHashMap<>();
+        // Helvetica (Nimbus Sans)
+        Map.entry("Helvetica",          "/fonts/NimbusSans-Regular.ttf"),
+        Map.entry("Helvetica-Bold",     "/fonts/NimbusSans-Bold.ttf"),
+        Map.entry("Helvetica-Oblique",  "/fonts/NimbusSans-Italic.ttf"),
+        Map.entry("Helvetica-BoldOblique", "/fonts/NimbusSans-BoldItalic.ttf"),
 
-        // Times (URW Nimbus Roman)
-        register(m, "/fonts/NimbusRoman-Regular.ttf",
-                "Times",
-                "Times-Roman",
-                "Times Roman",
-                "Times New Roman",
-                "TimesNewRoman",
-                "Nimbus Roman",
-                "NimbusRoman",
-                "Nimbus Roman No9 L");
-        register(m, "/fonts/NimbusRoman-Bold.ttf",
-                "Times-Bold",
-                "Times Roman Bold",
-                "Times-BoldMT",
-                "Times New Roman Bold",
-                "Nimbus Roman Bold",
-                "NimbusRoman-Bold");
-        register(m, "/fonts/NimbusRoman-Italic.ttf",
-                "Times-Italic",
-                "Times-Oblique",
-                "Times Roman Italic",
-                "Times New Roman Italic",
-                "Nimbus Roman Italic",
-                "NimbusRoman-Italic");
-        register(m, "/fonts/NimbusRoman-BoldItalic.ttf",
-                "Times-BoldItalic",
-                "Times-BoldOblique",
-                "Times Roman Bold Italic",
-                "Times New Roman Bold Italic",
-                "Nimbus Roman Bold Italic",
-                "NimbusRoman-BoldItalic");
-
-        // Helvetica (URW Nimbus Sans)
-        register(m, "/fonts/NimbusSans-Regular.ttf",
-                "Helvetica",
-                "Helvetica Neue",
-                "HelveticaNeue",
-                "Arial",
-                "Nimbus Sans",
-                "NimbusSans",
-                "Liberation Sans");
-        register(m, "/fonts/NimbusSans-Bold.ttf",
-                "Helvetica-Bold",
-                "Helvetica Neue Bold",
-                "Arial Bold",
-                "Nimbus Sans Bold",
-                "NimbusSans-Bold",
-                "Liberation Sans Bold");
-        register(m, "/fonts/NimbusSans-Italic.ttf",
-                "Helvetica-Oblique",
-                "Helvetica-Italic",
-                "Helvetica Neue Italic",
-                "Arial Italic",
-                "Nimbus Sans Italic",
-                "NimbusSans-Italic",
-                "Liberation Sans Italic");
-        register(m, "/fonts/NimbusSans-BoldItalic.ttf",
-                "Helvetica-BoldOblique",
-                "Helvetica-BoldItalic",
-                "Helvetica Neue Bold Italic",
-                "Arial Bold Italic",
-                "Nimbus Sans Bold Italic",
-                "NimbusSans-BoldItalic",
-                "Liberation Sans Bold Italic");
-
-        // Courier (URW Nimbus Mono PS)
-        register(m, "/fonts/NimbusMonoPS-Regular.ttf",
-                "Courier",
-                "Courier New",
-                "Nimbus Mono",
-                "NimbusMonoPS",
-                "Liberation Mono");
-        register(m, "/fonts/NimbusMonoPS-Bold.ttf",
-                "Courier-Bold",
-                "Courier New Bold",
-                "Nimbus Mono Bold",
-                "NimbusMonoPS-Bold",
-                "Liberation Mono Bold");
-        register(m, "/fonts/NimbusMonoPS-Italic.ttf",
-                "Courier-Oblique",
-                "Courier-Italic",
-                "Courier New Italic",
-                "Nimbus Mono Italic",
-                "NimbusMonoPS-Italic",
-                "Liberation Mono Italic");
-        register(m, "/fonts/NimbusMonoPS-BoldItalic.ttf",
-                "Courier-BoldOblique",
-                "Courier-BoldItalic",
-                "Courier New Bold Italic",
-                "Nimbus Mono Bold Italic",
-                "NimbusMonoPS-BoldItalic",
-                "Liberation Mono Bold Italic");
+        // Courier (Nimbus Mono)
+        Map.entry("Courier",            "/fonts/NimbusMonoPS-Regular.ttf"),
+        Map.entry("Courier-Bold",       "/fonts/NimbusMonoPS-Bold.ttf"),
+        Map.entry("Courier-Oblique",    "/fonts/NimbusMonoPS-Italic.ttf"),
+        Map.entry("Courier-BoldOblique","/fonts/NimbusMonoPS-BoldItalic.ttf"),
 
         // Symbol & Dingbats
-        register(m, "/fonts/StandardSymbolsPS.ttf",
-                "Symbol",
-                "Standard Symbols PS",
-                "SymbolMT",
-                "Symbols");
-        register(m, "/fonts/D050000L.ttf",
-                "ZapfDingbats",
-                "Zapf Dingbats",
-                "Dingbats",
-                "ITC Zapf Dingbats");
-
-        FONT_ALIASES_TO_TTF = java.util.Collections.unmodifiableMap(m);
-    }
-
-    private static void register(Map<String, String> m, String path, String... names) {
-        for (String n : names) {
-            m.put(n, path);
-        }
-    }
+        Map.entry("Symbol",             "/fonts/StandardSymbolsPS.ttf"),
+        Map.entry("ZapfDingbats",       "/fonts/D050000L.ttf")
+    );
 
     /**
-     * Registers the Base 14 fonts (plus common aliases) for OpenHTMLtoPDF using URW TTF fonts.
+     * Registers the Base 14 fonts for OpenHTMLtoPDF using URW TTF fonts.
      */
     public static void registerFonts(PdfRendererBuilder builder) {
-        FONT_ALIASES_TO_TTF.forEach((familyName, fontPath) -> {
+        BASE_14_TO_TTF.forEach((base14Name, fontPath) -> {
             FSSupplier<InputStream> supplier = () ->
                 BaseFontMapping.class.getResourceAsStream(fontPath);
-            builder.useFont(supplier, familyName);
+            builder.useFont(supplier, base14Name);
         });
     }
 }
