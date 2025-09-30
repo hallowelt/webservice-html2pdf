@@ -80,7 +80,7 @@ public class MainController {
 
 			PdfRendererBuilder builder = new PdfRendererBuilder();
 
-            BaseFontMapping.registerFonts(builder);
+			BaseFontMapping.registerFonts(builder);
 
 			builder.useFastMode();
 			builder.usePdfUaAccessibility(true);
