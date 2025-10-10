@@ -80,22 +80,22 @@ public class MainController {
 
 			PdfRendererBuilder builder = new PdfRendererBuilder();
 
-            BaseFontMapping.registerFonts(builder);
+			BaseFontMapping.registerFonts(builder);
 
 			builder.useFastMode();
 			builder.usePdfUaAccessibility(true);
 			builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_3_U);
 			builder.useSVGDrawer(new BatikSVGDrawer());
 			builder.useExternalResourceAccessControl(
-					(uri, type) -> {
-						return this.allowFileEmbed(uri, type);
-					},
-					ExternalResourceControlPriority.RUN_AFTER_RESOLVING_URI);
+				(uri, type) -> {
+					return this.allowFileEmbed(uri, type);
+				},
+				ExternalResourceControlPriority.RUN_AFTER_RESOLVING_URI);
 			builder.useExternalResourceAccessControl(
-					(uri, type) -> {
-						return this.allowFileEmbed(uri, type);
-					},
-					ExternalResourceControlPriority.RUN_BEFORE_RESOLVING_URI);
+				(uri, type) -> {
+					return this.allowFileEmbed(uri, type);
+				},
+				ExternalResourceControlPriority.RUN_BEFORE_RESOLVING_URI);
 
 			logger.info("Document File: " + documentFile.getAbsolutePath());
 			Document doc = html5ParseDocument(documentFile);
@@ -123,9 +123,9 @@ public class MainController {
 	private Document html5ParseDocument(File htmlFile) throws IOException {
 		String fileContents = org.apache.commons.io.FileUtils.readFileToString(htmlFile, "UTF-8");
 		org.jsoup.nodes.Document doc = Jsoup.parse(
-				fileContents,
-				htmlFile.toURI().toASCIIString(),
-				Parser.xmlParser() // Required as otherwise CDATA is not parsed correctly
+			fileContents,
+			htmlFile.toURI().toASCIIString(),
+			Parser.xmlParser() // Required as otherwise CDATA is not parsed correctly
 		);
 
 		this.sanitizeDocument(doc);
@@ -215,33 +215,70 @@ public class MainController {
 	}
 
 	/**
-     * Sanitizes the document by removing elements that breaking PDF rendering.
-     *
-     * @param doc The document to sanitize.
-     */
+	 * Sanitizes the document by removing elements that breaking PDF rendering.
+	 *
+	 * @param doc The document to sanitize.
+	 */
 	private void sanitizeDocument(org.jsoup.nodes.Document doc) {
-        Elements inputs = doc.select("input");
-        for (org.jsoup.nodes.Element input : inputs) {
-            logger.debug("Sanitize: replace element: " + input.toString());
+		Elements inputs = doc.select("input");
+		for (org.jsoup.nodes.Element input : inputs) {
+			logger.debug("Sanitize: replace element: " + input.toString());
 
-            org.jsoup.nodes.Element span = new org.jsoup.nodes.Element("span");
+			org.jsoup.nodes.Element span = new org.jsoup.nodes.Element("span");
 
-            String value = input.attr("value");
-            if (!value.isEmpty()) {
-                span.text(value);
-            }
+			String value = input.attr("value");
+			if (!value.isEmpty()) {
+				span.text(value);
+			}
 
-            if (input.hasAttr("class")) {
-                span.attr("class", input.attr("class"));
-            }
-            if (input.hasAttr("style")) {
-                span.attr("style", input.attr("style"));
-            }
+			if (input.hasAttr("class")) {
+				span.attr("class", input.attr("class"));
+			}
+			if (input.hasAttr("style")) {
+				span.attr("style", input.attr("style"));
+			}
 
-            // Replace the input with the span
-            input.replaceWith(span);
-        }
-    }
+			// Replace the input with the span
+			input.replaceWith(span);
+		}
+
+		// We need to strip all unsupported font-families from inline CSS styles
+		// TODO: Currently we strip _all_ font-family definitions. Should limit to unsupported ones.
+		Elements styledElements = doc.select("[style]");
+		for (org.jsoup.nodes.Element el : styledElements) {
+			String style = el.attr("style");
+			String normalizedStyle = style
+				.replaceAll(";;+", ";") // multiple semicolons
+				.replaceAll(";+$", "") // trailing semicolons
+				.replaceAll("\\s+", " ") // multiple spaces
+				.trim();
+
+			// Examples of things to strip
+			// * font-family:Wingdings;mso-fareast-font-family:Wingdings;mso-bidi-font-family:Wingdings
+			// * mso-list:Ignore
+			// * font:7.0pt "Times New Roman"
+			String[] parts = normalizedStyle.split(";");
+			List<String> sanitizedParts = new ArrayList<>();
+			// Iterate
+			for (int i = 0; i < parts.length; i++) {
+				String part = parts[i];
+				// Strip unsupported properties
+				String sanitizedPart = part
+					.replaceAll("mso-[^:]+:[^;]+$", "")
+					.replaceAll("font-family:[^;]+$", "")
+					.replaceAll("font:[^;]+$", "");
+				if (!sanitizedPart.isEmpty()) {
+					sanitizedParts.add(sanitizedPart);
+				}
+			}
+
+			String sanitizedStyle = String.join(";", sanitizedParts);
+			if (!normalizedStyle.equals(sanitizedStyle)) {
+				logger.debug("Sanitize: update style: " + style + " => " + sanitizedStyle);
+				el.attr("style", sanitizedStyle);
+			}
+		}
+	}
 
 	private void deleteDirectory(File directroy) {
 		if (directroy.exists()) {
