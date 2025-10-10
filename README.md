@@ -54,7 +54,7 @@ To check if the service is responsive one can execute a HTTP request against the
 
 Example:
 ```bash
-curl http://50x-pdf:8080/Html2PDF/v1/
+curl http://localhost:8080/Html2PDF/v1/
 ```
 will return somthing like:
 ```
