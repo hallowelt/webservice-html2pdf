@@ -8,6 +8,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.jsoup.Jsoup;
 import org.jsoup.helper.W3CDom;
@@ -25,7 +27,6 @@ import com.openhtmltopdf.outputdevice.helper.ExternalResourceControlPriority;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceType;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import com.openhtmltopdf.svgsupport.BatikSVGDrawer;
-import com.openhtmltopdf.extend.FSSupplier;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -59,7 +60,7 @@ public class MainController {
 		Map<String, Object> response = new HashMap<>();
 		response.put("success", true);
 		response.put("msg", "Service is running");
-		response.put( "version", "1.0.7");
+		response.put( "version", "1.1.0");
 		return response;
 	}
 
@@ -87,15 +88,15 @@ public class MainController {
 			builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_3_U);
 			builder.useSVGDrawer(new BatikSVGDrawer());
 			builder.useExternalResourceAccessControl(
-					(uri, type) -> {
-						return this.allowFileEmbed(uri, type);
-					},
-					ExternalResourceControlPriority.RUN_AFTER_RESOLVING_URI);
+				(uri, type) -> {
+					return this.allowFileEmbed(uri, type);
+				},
+				ExternalResourceControlPriority.RUN_AFTER_RESOLVING_URI);
 			builder.useExternalResourceAccessControl(
-					(uri, type) -> {
-						return this.allowFileEmbed(uri, type);
-					},
-					ExternalResourceControlPriority.RUN_BEFORE_RESOLVING_URI);
+				(uri, type) -> {
+					return this.allowFileEmbed(uri, type);
+				},
+				ExternalResourceControlPriority.RUN_BEFORE_RESOLVING_URI);
 
 			logger.info("Document File: " + documentFile.getAbsolutePath());
 			Document doc = html5ParseDocument(documentFile);
@@ -123,9 +124,9 @@ public class MainController {
 	private Document html5ParseDocument(File htmlFile) throws IOException {
 		String fileContents = org.apache.commons.io.FileUtils.readFileToString(htmlFile, "UTF-8");
 		org.jsoup.nodes.Document doc = Jsoup.parse(
-				fileContents,
-				htmlFile.toURI().toASCIIString(),
-				Parser.xmlParser() // Required as otherwise CDATA is not parsed correctly
+			fileContents,
+			htmlFile.toURI().toASCIIString(),
+			Parser.xmlParser() // Required as otherwise CDATA is not parsed correctly
 		);
 
 		this.sanitizeDocument(doc);
@@ -215,33 +216,135 @@ public class MainController {
 	}
 
 	/**
-     * Sanitizes the document by removing elements that breaking PDF rendering.
-     *
-     * @param doc The document to sanitize.
-     */
+	 * Sanitizes the document by removing elements that breaking PDF rendering.
+	 *
+	 * @param doc The document to sanitize.
+	 */
 	private void sanitizeDocument(org.jsoup.nodes.Document doc) {
-        Elements inputs = doc.select("input");
-        for (org.jsoup.nodes.Element input : inputs) {
-            logger.debug("Sanitize: replace element: " + input.toString());
+		Elements inputs = doc.select("input");
+		for (org.jsoup.nodes.Element input : inputs) {
+			logger.debug("Sanitize: replace element: " + input.toString());
 
-            org.jsoup.nodes.Element span = new org.jsoup.nodes.Element("span");
+			org.jsoup.nodes.Element span = new org.jsoup.nodes.Element("span");
 
-            String value = input.attr("value");
-            if (!value.isEmpty()) {
-                span.text(value);
-            }
+			String value = input.attr("value");
+			if (!value.isEmpty()) {
+				span.text(value);
+			}
 
-            if (input.hasAttr("class")) {
-                span.attr("class", input.attr("class"));
-            }
-            if (input.hasAttr("style")) {
-                span.attr("style", input.attr("style"));
-            }
+			if (input.hasAttr("class")) {
+				span.attr("class", input.attr("class"));
+			}
+			if (input.hasAttr("style")) {
+				span.attr("style", input.attr("style"));
+			}
 
-            // Replace the input with the span
-            input.replaceWith(span);
-        }
-    }
+			// Replace the input with the span
+			input.replaceWith(span);
+		}
+
+		String[] supportedNormalizedFonts = new String[] {
+			"courier",
+			"helvetica",
+			"monospace",
+			"sans-serif",
+			"serif",
+			"symbol",
+			"times",
+			"zapfdingbats"
+		};
+
+		// We need to strip all unsupported font-families from inline CSS styles
+		Elements styledElements = doc.select("[style]");
+		for (org.jsoup.nodes.Element el : styledElements) {
+			String style = el.attr("style");
+			String normalizedStyle = style
+				.replaceAll(";;+", ";") // multiple semicolons
+				.replaceAll(";+$", "") // trailing semicolons
+				.replaceAll("\\s+", " ") // multiple spaces
+				.trim();
+
+			// Examples of things to strip
+			// * font-family:Wingdings;mso-fareast-font-family:Wingdings;mso-bidi-font-family:Wingdings
+			// * mso-list:Ignore
+			// * font:7.0pt "Times New Roman"
+			String[] parts = normalizedStyle.split(";");
+			List<String> sanitizedParts = new ArrayList<>();
+			for (int i = 0; i < parts.length; i++) {
+				String part = parts[i];
+				String[] rule = part.split(":", 2);
+				if (rule.length != 2) {
+					continue;
+				}
+				String property = rule[0].trim();
+				String normalizedProperty = property.toLowerCase();
+				String value = rule[1].trim();
+				String normalizedValue = value.toLowerCase();
+
+				// Strip `mso-*` entirely
+				if (normalizedProperty.startsWith("mso-")) {
+					logger.debug("Sanitize: remove property: " + normalizedProperty + ":" + normalizedValue);
+					continue;
+				}
+
+				// Leave unchanged if not `font-family` or `font`
+				if (!normalizedProperty.equals("font-family")
+					&& !normalizedProperty.equals("font")) {
+					sanitizedParts.add(part);
+					continue;
+				}
+
+				if ( normalizedProperty.equals("font-family") ) {
+					// font-family:Arial, Helvetica, sans-serif
+					String[] families = value.split(",");
+					List<String> sanitizedFamilies = new ArrayList<>();
+					for (String family : families) {
+						String normalizedFamily = family.trim().toLowerCase();
+						for (String supportedNormalizedFont : supportedNormalizedFonts) {
+							if (normalizedFamily.equals(supportedNormalizedFont)) {
+								sanitizedFamilies.add(family.trim());
+								break;
+							}
+						}
+					}
+					if (sanitizedFamilies.size() == 0) {
+						logger.debug("Sanitize: remove property: " + normalizedProperty + ":" + normalizedValue);
+						continue;
+					}
+					value = String.join(", ", sanitizedFamilies); // We keep processing below
+				}
+
+				// Try to extract quoted strings from the value, e.g. `7.0pt "Times New Roman"`
+				Pattern pattern = Pattern.compile("\"([^\"]+)\"");
+				Matcher matcher = pattern.matcher(value);
+				StringBuffer sanitizedValue = new StringBuffer();
+				while (matcher.find()) {
+					String match = matcher.group(1);
+					String normalizedMatch = match.toLowerCase();
+					String replacement = "";
+					for (String supportedNormalizedFont : supportedNormalizedFonts) {
+						if (normalizedMatch.equals(supportedNormalizedFont)) {
+							replacement = match;
+							break;
+						}
+					}
+					matcher.appendReplacement(sanitizedValue, Matcher.quoteReplacement(replacement));
+				}
+				matcher.appendTail(sanitizedValue);
+				if (sanitizedValue.length() == 0) {
+					logger.debug("Sanitize: remove property: " + normalizedProperty + ":" + normalizedValue);
+					continue;
+				}
+				sanitizedParts.add(property + ":" + sanitizedValue.toString().trim());
+			}
+
+			String sanitizedStyle = String.join(";", sanitizedParts);
+			if (!normalizedStyle.equals(sanitizedStyle)) {
+				logger.debug("Sanitize: update style: " + style + " => " + sanitizedStyle);
+				el.attr("style", sanitizedStyle);
+			}
+		}
+	}
 
 	private void deleteDirectory(File directroy) {
 		if (directroy.exists()) {
