@@ -246,6 +246,9 @@ public class MainController {
 		String[] supportedNormalizedFonts = new String[] {
 			"courier",
 			"helvetica",
+			"monospace",
+			"sans-serif",
+			"serif",
 			"symbol",
 			"times",
 			"zapfdingbats"
