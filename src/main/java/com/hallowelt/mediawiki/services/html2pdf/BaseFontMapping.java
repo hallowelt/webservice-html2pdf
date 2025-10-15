@@ -27,6 +27,11 @@ public class BaseFontMapping {
 		Map.entry("Courier-Oblique",    "/fonts/NimbusMonoPS-Italic.ttf"),
 		Map.entry("Courier-BoldOblique","/fonts/NimbusMonoPS-BoldItalic.ttf"),
 
+		// Generic fallbacks
+		Map.entry("serif",              "/fonts/NimbusRoman-Regular.ttf"),
+		Map.entry("sans-serif",         "/fonts/NimbusSans-Regular.ttf"),
+		Map.entry("monospace",          "/fonts/NimbusMonoPS-Regular.ttf"),
+
 		// Symbol & Dingbats
 		Map.entry("Symbol",             "/fonts/StandardSymbolsPS.ttf"),
 		Map.entry("ZapfDingbats",       "/fonts/D050000L.ttf")
