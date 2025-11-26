@@ -243,17 +243,6 @@ public class MainController {
 			input.replaceWith(span);
 		}
 
-		String[] supportedNormalizedFonts = new String[] {
-			"courier",
-			"helvetica",
-			"monospace",
-			"sans-serif",
-			"serif",
-			"symbol",
-			"times",
-			"zapfdingbats"
-		};
-
 		// We need to strip all unsupported font-families from inline CSS styles
 		Elements styledElements = doc.select("[style]");
 		for (org.jsoup.nodes.Element el : styledElements) {
