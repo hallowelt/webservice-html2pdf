@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.w3c.dom.Document;
 
+import com.openhtmltopdf.mathmlsupport.MathMLDrawer;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceControlPriority;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceType;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
@@ -87,6 +88,7 @@ public class MainController {
 			builder.usePdfUaAccessibility(true);
 			builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_3_U);
 			builder.useSVGDrawer(new BatikSVGDrawer());
+			builder.useMathMLDrawer(new MathMLDrawer());
 			builder.useExternalResourceAccessControl(
 				(uri, type) -> {
 					return this.allowFileEmbed(uri, type);
