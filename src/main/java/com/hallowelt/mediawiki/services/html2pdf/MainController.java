@@ -1,7 +1,10 @@
 package com.hallowelt.mediawiki.services.html2pdf;
 
+import java.awt.Font;
+import java.awt.GraphicsEnvironment;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -41,6 +44,8 @@ public class MainController {
 	private static final Logger logger = LoggerFactory.getLogger(MainController.class);
 
 	public MainController() {
+		registerSTIXFonts();
+
 		String tempPath = System.getProperty("html2pdf.temp.dir");
 		if (tempPath == null) {
 			tempPath = System.getenv("HTML2PDF_TEMP_DIR");
@@ -63,6 +68,28 @@ public class MainController {
 		response.put("msg", "Service is running");
 		response.put( "version", "1.1.1");
 		return response;
+	}
+
+	private void registerSTIXFonts() {
+		String[] mathFonts = {
+			"/fonts/STIXTwoMath-Regular.ttf",
+			"/fonts/STIXTwoText-Regular.ttf",
+			"/fonts/STIXTwoText-Bold.ttf",
+			"/fonts/STIXTwoText-Italic.ttf",
+			"/fonts/STIXTwoText-BoldItalic.ttf"
+		};
+		GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+		for (String fontPath : mathFonts) {
+			try (InputStream is = getClass().getResourceAsStream(fontPath)) {
+				if (is == null) {
+					logger.warn("Math font resource not found: " + fontPath);
+					continue;
+				}
+				ge.registerFont(Font.createFont(Font.TRUETYPE_FONT, is));
+			} catch (Exception e) {
+				logger.warn("Could not register math font: " + fontPath, e);
+			}
+		}
 	}
 
 	// Returns application/pdf

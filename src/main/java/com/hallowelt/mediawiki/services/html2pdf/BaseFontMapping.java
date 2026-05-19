@@ -34,7 +34,14 @@ public class BaseFontMapping {
 
 		// Symbol & Dingbats
 		Map.entry("Symbol",             "/fonts/StandardSymbolsPS.ttf"),
-		Map.entry("ZapfDingbats",       "/fonts/D050000L.ttf")
+		Map.entry("ZapfDingbats",       "/fonts/D050000L.ttf"),
+
+		// STIX Two (math & text)
+		Map.entry("STIXTwoMath",        "/fonts/STIXTwoMath-Regular.ttf"),
+		Map.entry("STIXTwoText",        "/fonts/STIXTwoText-Regular.ttf"),
+		Map.entry("STIXTwoText-Bold",   "/fonts/STIXTwoText-Bold.ttf"),
+		Map.entry("STIXTwoText-Italic", "/fonts/STIXTwoText-Italic.ttf"),
+		Map.entry("STIXTwoText-BoldItalic", "/fonts/STIXTwoText-BoldItalic.ttf")
 	);
 
 	/**
