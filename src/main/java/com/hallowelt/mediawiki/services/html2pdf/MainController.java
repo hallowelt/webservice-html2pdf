@@ -1,7 +1,10 @@
 package com.hallowelt.mediawiki.services.html2pdf;
 
+import java.awt.Font;
+import java.awt.GraphicsEnvironment;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.w3c.dom.Document;
 
+import com.openhtmltopdf.mathmlsupport.MathMLDrawer;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceControlPriority;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceType;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
@@ -38,6 +42,8 @@ public class MainController {
 	private static final Logger logger = LoggerFactory.getLogger(MainController.class);
 
 	public MainController() {
+		registerSTIXFonts();
+
 		String tempPath = System.getProperty("html2pdf.temp.dir");
 		if (tempPath == null) {
 			tempPath = System.getenv("HTML2PDF_TEMP_DIR");
@@ -60,6 +66,28 @@ public class MainController {
 		response.put("msg", "Service is running");
 		response.put( "version", "1.1.3");
 		return response;
+	}
+
+	private void registerSTIXFonts() {
+		String[] mathFonts = {
+			"/fonts/STIXTwoMath-Regular.ttf",
+			"/fonts/STIXTwoText-Regular.ttf",
+			"/fonts/STIXTwoText-Bold.ttf",
+			"/fonts/STIXTwoText-Italic.ttf",
+			"/fonts/STIXTwoText-BoldItalic.ttf"
+		};
+		GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+		for (String fontPath : mathFonts) {
+			try (InputStream is = getClass().getResourceAsStream(fontPath)) {
+				if (is == null) {
+					logger.warn("Math font resource not found: " + fontPath);
+					continue;
+				}
+				ge.registerFont(Font.createFont(Font.TRUETYPE_FONT, is));
+			} catch (Exception e) {
+				logger.warn("Could not register math font: " + fontPath, e);
+			}
+		}
 	}
 
 	// Returns application/pdf
@@ -85,6 +113,7 @@ public class MainController {
 			builder.usePdfUaAccessibility(true);
 			builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_3_U);
 			builder.useSVGDrawer(new BatikSVGDrawer());
+			builder.useMathMLDrawer(new MathMLDrawer());
 			builder.useExternalResourceAccessControl(
 				(uri, type) -> {
 					return this.allowFileEmbed(uri, type);
