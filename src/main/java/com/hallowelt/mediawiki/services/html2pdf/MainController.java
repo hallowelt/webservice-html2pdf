@@ -284,6 +284,22 @@ public class MainController {
 				el.attr("style", sanitizedStyle);
 			}
 		}
+
+		// If a file `./additional_head_data.html` exists, read
+		// its contents and prepend it into the document <head> to provide
+		// additional styles or metadata. This can be used, e.g., to provide
+		// global fallback fonts.
+		try {
+			File additionalHeadFile = new File("./additional_head_data.html");
+			if (additionalHeadFile.exists() && additionalHeadFile.isFile()) {
+				String additional_head_data = org.apache.commons.io.FileUtils.readFileToString(additionalHeadFile, "UTF-8");
+				if (additional_head_data != null && !additional_head_data.isEmpty()) {
+					doc.select("head").prepend(additional_head_data);
+				}
+			}
+		} catch (Exception e) {
+			logger.error("Error reading additional_head_data.html", e);
+		}
 	}
 
 	private void deleteDirectory(File directroy) {

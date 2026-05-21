@@ -61,6 +61,22 @@ will return somthing like:
 {"msg":"Service is running","success":true,"version":"1.1.3"}
 ```
 
+## Adding global styles and fallback fonts
+
+The service will read a file `additional_head_data.html` in the same folder as the service container and prepend it to the `<head>` element of every processed HTML page. You can use this file for adding global metadata, styling, or providing global fallback fonts. This could look like this:
+
+```
+<style>
+html { font-family: fallback; }
+@font-face {
+	font-family: fallback;
+	src: url('file:///app/fonts/fallback.ttf');
+}
+</style>
+```
+
+**Note:** The service is configured to produce PDFs that conform to the PDF/A and PDF/UA standards. A side effect is the requirement to have all used fonts embedded. If an unknown font (or no font-family at all) is encountered, openhtmltopdf will ignore all text set in this font completely (that is, the text will not be in the resulting PDF at all). Therefore we advise to provide some kind of fallback.
+
 ## "bshtml2pdf" compatibility
 The old "bshtml2pdf" service ran servlets on a Tomcat server and hat `/BShtml2PDF` as the base URL. This service runs standalone and therefore lacks the `/BShtml2PDF` base URL. The client implementation must be adjusted accordingly.
 
@@ -78,5 +94,5 @@ or using the Docker image:
 docker run -p 8080:8080 -e APP_PATH=/BShtml2PDF webservice-htmlpdf
 ```
 
-# TODO:
+## TODO
 * Implement proper support for custom fonts (e.g. from inline CSS)
