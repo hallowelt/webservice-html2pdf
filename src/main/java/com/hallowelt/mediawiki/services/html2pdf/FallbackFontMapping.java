@@ -17,6 +17,7 @@ import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 
 public class FallbackFontMapping {
     private List<CSSFont> fontsAdded;
+    private String fontFamilyNamesCache;
 
     public FallbackFontMapping() {
         loadFallbackFonts();
@@ -107,16 +108,24 @@ public class FallbackFontMapping {
         }
 
         this.fontsAdded = processor.getFontsAdded();
+        this.fontFamilyNamesCache = toCSSEscapedFontFamily(this.fontsAdded);
     }
 
-    public void provideFallbackFonts(PdfRendererBuilder builder, StringBuilder fontFamilyNames) {
+    /**
+     * Returns the CSS font-family names for all fallback fonts as a comma-separated
+     * string ready to embed in a {@code font-family} declaration, e.g.
+     * {@code 'Noto Sans', 'Noto Sans Symbols', ...}.
+     */
+    public String getFontFamilyNames() {
+        return fontFamilyNamesCache;
+    }
+
+    public void registerFallbackFonts(PdfRendererBuilder builder) {
         for (CSSFont font : fontsAdded) {
             builder.useFont(
                  () -> FallbackFontMapping.class.getResourceAsStream(font.resourceName),
                 font.family, font.weight, font.style, true);
         }
-
-        fontFamilyNames.append(toCSSEscapedFontFamily(fontsAdded));
     }
 
     private String toCSSEscapedFontFamily(List<CSSFont> fontsList) {

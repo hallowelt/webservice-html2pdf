@@ -8,6 +8,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -23,9 +25,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.w3c.dom.Document;
 
+import com.openhtmltopdf.extend.FSCacheEx;
+import com.openhtmltopdf.extend.FSCacheValue;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceControlPriority;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceType;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
+import com.openhtmltopdf.pdfboxout.PdfRendererBuilder.CacheStore;
 import com.openhtmltopdf.svgsupport.BatikSVGDrawer;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,6 +43,43 @@ public class MainController {
 	private File tempPathFile = null;
 
 	private FallbackFontMapping fallbackFontMapping = new FallbackFontMapping();
+
+	/**
+	 * Persistent font metrics cache shared across all PDF render requests.
+	 * Populated by the static classpath fonts (Base 14 and Noto fallback fonts).
+	 * User-uploaded fonts referenced via CSS {@code @font-face} do not interact
+	 * with this cache and are therefore never stored here.
+	 */
+	private final FSCacheEx<String, FSCacheValue> fontMetricsCache = new FSCacheEx<String, FSCacheValue>() {
+		private final ConcurrentHashMap<String, FSCacheValue> store = new ConcurrentHashMap<>();
+
+		@Override
+		public void put(String key, FSCacheValue value) {
+			store.put(key, value);
+		}
+
+		@Override
+		public FSCacheValue get(String key, Callable<? extends FSCacheValue> loader) {
+			FSCacheValue cached = store.get(key);
+			if (cached != null) {
+				return cached;
+			}
+			try {
+				FSCacheValue value = loader.call();
+				if (value != null) {
+					store.put(key, value);
+				}
+				return value;
+			} catch (Exception e) {
+				return null;
+			}
+		}
+
+		@Override
+		public FSCacheValue get(String key) {
+			return store.get(key);
+		}
+	};
 
 	private static final Logger logger = LoggerFactory.getLogger(MainController.class);
 
@@ -115,9 +157,10 @@ public class MainController {
 
 			PdfRendererBuilder builder = new PdfRendererBuilder();
 
+			builder.useCacheStore(CacheStore.PDF_FONT_METRICS, fontMetricsCache);
+
 			BaseFontMapping.registerFonts(builder);
-			StringBuilder fontFamilyNames = new StringBuilder();
-			fallbackFontMapping.provideFallbackFonts(builder, fontFamilyNames);
+			fallbackFontMapping.registerFallbackFonts(builder);
 
 			builder.useFastMode();
 			builder.usePdfUaAccessibility(true);
@@ -135,7 +178,7 @@ public class MainController {
 				ExternalResourceControlPriority.RUN_BEFORE_RESOLVING_URI);
 
 			logger.info("Document File: " + documentFile.getAbsolutePath());
-			Document doc = html5ParseDocument(documentFile, fontFamilyNames);
+			Document doc = html5ParseDocument(documentFile);
 			builder.withW3cDocument(doc, documentFile.toURI().toASCIIString());
 
 			logger.debug("Start building PDF");
@@ -157,7 +200,7 @@ public class MainController {
 		}
 	}
 
-	private Document html5ParseDocument(File htmlFile, StringBuilder fontFamilyNames) throws IOException {
+	private Document html5ParseDocument(File htmlFile) throws IOException {
 		String fileContents = org.apache.commons.io.FileUtils.readFileToString(htmlFile, "UTF-8");
 		org.jsoup.nodes.Document doc = Jsoup.parse(
 			fileContents,
@@ -165,7 +208,7 @@ public class MainController {
 			Parser.xmlParser() // Required as otherwise CDATA is not parsed correctly
 		);
 
-		this.sanitizeDocument(doc, fontFamilyNames);
+		this.sanitizeDocument(doc);
 
 		// Find all elements that have `data-fs-embed-file="true"`and convert to
 		// `download="..."`
@@ -255,9 +298,8 @@ public class MainController {
 	 * Sanitizes the document by removing elements that breaking PDF rendering.
 	 *
 	 * @param doc The document to sanitize.
-	 * @param fontFamilyNames The StringBuilder to collect font family names.
 	 */
-	private void sanitizeDocument(org.jsoup.nodes.Document doc, StringBuilder fontFamilyNames) {
+	private void sanitizeDocument(org.jsoup.nodes.Document doc) {
 		Elements inputs = doc.select("input");
 		for (org.jsoup.nodes.Element input : inputs) {
 			logger.debug("Sanitize: replace element: " + input.toString());
@@ -334,7 +376,7 @@ public class MainController {
 			}
 		}
 
-		doc.select("head").prepend("<style>html{font-family:serif-fallback," + fontFamilyNames.toString() + "}</style>");
+		doc.select("head").prepend("<style>html{font-family:serif-fallback," + fallbackFontMapping.getFontFamilyNames() + "}</style>");
 	}
 
 	/**
@@ -342,6 +384,9 @@ public class MainController {
 	 * {@code sans-serif}, {@code monospace}, {@code cursive}, {@code fantasy}) to
 	 * their {@code -fallback}-suffixed counterparts within {@code font-family} and
 	 * {@code font} shorthand declarations found in {@code content}.
+	 * {@code fallbackFontFamilies} is
+	 * appended to the end of all found values so that the full Noto fallback chain is
+	 * available for any characters not covered by the named fonts.
 	 *
 	 * <p>The replacement is scoped to declaration values only, so occurrences inside
 	 * URL paths, comments, or other CSS constructs are left untouched.
@@ -351,15 +396,19 @@ public class MainController {
 	 *
 	 * @param content raw CSS (or any text containing CSS declarations)
 	 * @return the content with generic font-family keywords postfixed by
-	 *         {@code -fallback}
+	 *         {@code -fallback} and the fallback chain appended
 	 */
 	private String rewriteGenericFontFamilies(String content) {
 		Matcher m = FONT_DECLARATION_PATTERN.matcher(content);
 		StringBuffer sb = new StringBuffer();
+		String fallbackFontFamilies = fallbackFontMapping.getFontFamilyNames();
 		while (m.find()) {
 			String prefix = m.group(1);
 			String value = m.group(2);
 			String rewrittenValue = GENERIC_FONT_FAMILY_PATTERN.matcher(value).replaceAll("$1-fallback");
+			if (!fallbackFontFamilies.isEmpty()) {
+				rewrittenValue = rewrittenValue.stripTrailing() + ", " + fallbackFontFamilies;
+			}
 			m.appendReplacement(sb, Matcher.quoteReplacement(prefix + rewrittenValue));
 		}
 		m.appendTail(sb);
