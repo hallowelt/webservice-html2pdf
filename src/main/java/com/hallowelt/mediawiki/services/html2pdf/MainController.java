@@ -8,6 +8,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.jsoup.Jsoup;
 import org.jsoup.helper.W3CDom;
@@ -35,7 +37,41 @@ public class MainController {
 
 	private File tempPathFile = null;
 
+	private FallbackFontMapping fallbackFontMapping = new FallbackFontMapping();
+
 	private static final Logger logger = LoggerFactory.getLogger(MainController.class);
+
+	/**
+	 * Matches CSS {@code font-family} and {@code font} shorthand declarations,
+	 * capturing the property prefix (group 1) and the value (group 2) separately so
+	 * that only the value is rewritten by {@link #rewriteGenericFontFamilies(String)}.
+	 *
+	 * <p>The pattern {@code font(?:-family)?} matches {@code font} and
+	 * {@code font-family} but never {@code font-size}, {@code font-weight}, etc.,
+	 * because those properties have a further {@code -} suffix that prevents the
+	 * trailing {@code \\s*:} from matching.
+	 */
+	private static final Pattern FONT_DECLARATION_PATTERN = Pattern.compile(
+		"(font(?:-family)?\\s*:\\s*)([^;}]+)",
+		Pattern.CASE_INSENSITIVE
+	);
+
+	/**
+	 * Matches the five CSS generic font-family keywords as whole tokens, guarded by
+	 * negative look-behind/ahead so that:
+	 * <ul>
+	 *   <li>{@code serif} inside {@code sans-serif} is not matched (the preceding
+	 *       {@code -} triggers the look-behind);</li>
+	 *   <li>already-rewritten values (e.g. {@code sans-serif-fallback}) are not
+	 *       matched again (negative look-ahead {@code (?!-fallback)}).</li>
+	 * </ul>
+	 * {@code sans-serif} must appear before {@code serif} in the alternation so the
+	 * longer token is tried first.
+	 */
+	private static final Pattern GENERIC_FONT_FAMILY_PATTERN = Pattern.compile(
+		"(?<![a-zA-Z0-9-])(sans-serif|serif|monospace|cursive|fantasy)(?!-fallback)(?![a-zA-Z0-9-])",
+		Pattern.CASE_INSENSITIVE
+	);
 
 	public MainController() {
 		String tempPath = System.getProperty("html2pdf.temp.dir");
@@ -80,6 +116,8 @@ public class MainController {
 			PdfRendererBuilder builder = new PdfRendererBuilder();
 
 			BaseFontMapping.registerFonts(builder);
+			StringBuilder fontFamilyNames = new StringBuilder();
+			fallbackFontMapping.provideFallbackFonts(builder, fontFamilyNames);
 
 			builder.useFastMode();
 			builder.usePdfUaAccessibility(true);
@@ -97,7 +135,7 @@ public class MainController {
 				ExternalResourceControlPriority.RUN_BEFORE_RESOLVING_URI);
 
 			logger.info("Document File: " + documentFile.getAbsolutePath());
-			Document doc = html5ParseDocument(documentFile);
+			Document doc = html5ParseDocument(documentFile, fontFamilyNames);
 			builder.withW3cDocument(doc, documentFile.toURI().toASCIIString());
 
 			logger.debug("Start building PDF");
@@ -119,7 +157,7 @@ public class MainController {
 		}
 	}
 
-	private Document html5ParseDocument(File htmlFile) throws IOException {
+	private Document html5ParseDocument(File htmlFile, StringBuilder fontFamilyNames) throws IOException {
 		String fileContents = org.apache.commons.io.FileUtils.readFileToString(htmlFile, "UTF-8");
 		org.jsoup.nodes.Document doc = Jsoup.parse(
 			fileContents,
@@ -127,7 +165,7 @@ public class MainController {
 			Parser.xmlParser() // Required as otherwise CDATA is not parsed correctly
 		);
 
-		this.sanitizeDocument(doc);
+		this.sanitizeDocument(doc, fontFamilyNames);
 
 		// Find all elements that have `data-fs-embed-file="true"`and convert to
 		// `download="..."`
@@ -217,8 +255,9 @@ public class MainController {
 	 * Sanitizes the document by removing elements that breaking PDF rendering.
 	 *
 	 * @param doc The document to sanitize.
+	 * @param fontFamilyNames The StringBuilder to collect font family names.
 	 */
-	private void sanitizeDocument(org.jsoup.nodes.Document doc) {
+	private void sanitizeDocument(org.jsoup.nodes.Document doc, StringBuilder fontFamilyNames) {
 		Elements inputs = doc.select("input");
 		for (org.jsoup.nodes.Element input : inputs) {
 			logger.debug("Sanitize: replace element: " + input.toString());
@@ -285,21 +324,46 @@ public class MainController {
 			}
 		}
 
-		// If a file `./additional_head_data.html` exists, read
-		// its contents and prepend it into the document <head> to provide
-		// additional styles or metadata. This can be used, e.g., to provide
-		// global fallback fonts.
-		try {
-			File additionalHeadFile = new File("./additional_head_data.html");
-			if (additionalHeadFile.exists() && additionalHeadFile.isFile()) {
-				String additional_head_data = org.apache.commons.io.FileUtils.readFileToString(additionalHeadFile, "UTF-8");
-				if (additional_head_data != null && !additional_head_data.isEmpty()) {
-					doc.select("head").prepend(additional_head_data);
-				}
+		Elements styleElements = doc.select("style");
+		for (org.jsoup.nodes.Element el : styleElements) {
+			String css = el.text();
+			String rewrittenCss = rewriteGenericFontFamilies(css);
+			if (!css.equals(rewrittenCss)) {
+				logger.debug("Sanitize: update font-family in style element");
+				el.text(rewrittenCss);
 			}
-		} catch (Exception e) {
-			logger.error("Error reading additional_head_data.html", e);
 		}
+
+		doc.select("head").prepend("<style>html{font-family:serif-fallback," + fontFamilyNames.toString() + "}</style>");
+	}
+
+	/**
+	 * Rewrites the five CSS generic font-family keywords ({@code serif},
+	 * {@code sans-serif}, {@code monospace}, {@code cursive}, {@code fantasy}) to
+	 * their {@code -fallback}-suffixed counterparts within {@code font-family} and
+	 * {@code font} shorthand declarations found in {@code content}.
+	 *
+	 * <p>The replacement is scoped to declaration values only, so occurrences inside
+	 * URL paths, comments, or other CSS constructs are left untouched.
+	 * Within {@code font} shorthand values the keyword pattern only matches the five
+	 * specific generic family tokens — not font-weight keywords, sizes, etc. — so
+	 * co-existing values like {@code bold} or {@code 14px} are preserved as-is.
+	 *
+	 * @param content raw CSS (or any text containing CSS declarations)
+	 * @return the content with generic font-family keywords postfixed by
+	 *         {@code -fallback}
+	 */
+	private String rewriteGenericFontFamilies(String content) {
+		Matcher m = FONT_DECLARATION_PATTERN.matcher(content);
+		StringBuffer sb = new StringBuffer();
+		while (m.find()) {
+			String prefix = m.group(1);
+			String value = m.group(2);
+			String rewrittenValue = GENERIC_FONT_FAMILY_PATTERN.matcher(value).replaceAll("$1-fallback");
+			m.appendReplacement(sb, Matcher.quoteReplacement(prefix + rewrittenValue));
+		}
+		m.appendTail(sb);
+		return sb.toString();
 	}
 
 	private void deleteDirectory(File directroy) {
@@ -379,7 +443,14 @@ public class MainController {
 				Map<String, Object> fileObject = new HashMap<>();
 				File fileToSave = new File(typePath, submittedFileName);
 				try {
-					part.write(fileToSave.getAbsolutePath());
+					if (submittedFileName.toLowerCase().endsWith(".css")) {
+						String cssContent = org.apache.commons.io.IOUtils.toString(part.getInputStream(), "UTF-8");
+						String rewrittenContent = rewriteGenericFontFamilies(cssContent);
+						org.apache.commons.io.FileUtils.writeStringToFile(fileToSave, rewrittenContent, "UTF-8");
+						logger.info("Saved CSS with rewritten generic font families: " + fileToSave.getAbsolutePath());
+					} else {
+						part.write(fileToSave.getAbsolutePath());
+					}
 					fileObject.put("fieldName", fieldName);
 					fileObject.put("fileName", submittedFileName);
 					fileObject.put("contentType", part.getContentType());

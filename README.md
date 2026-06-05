@@ -24,7 +24,8 @@ docker run -p 8080:8080 webservice-htmlpdf
 ```
 ## Included Fonts and Licenses
 
-This project includes the following open source fonts as replacements for the PDF base 14 fonts:
+This project includes the following open source fonts as replacements for the PDF base 14 fonts and
+generic fallbacks:
 
 | Font Family         | Font Files (TTF)                        | License                                    |
 |---------------------|------------------------------------------|---------------------------------------------|
@@ -36,8 +37,9 @@ This project includes the following open source fonts as replacements for the PD
 |                     | -BoldItalic                              |                                             |
 | Standard Symbols PS | StandardSymbolsPS                        | GPL or AFPL (URW++)                        |
 | D050000L            | D050000L                                 | LaTeX Project Public License (LPPL)         |
+| Noto                | noto/*                                   | SIL Open Font                              |
 
-Font sources: [URW++ Core 35 Fonts](https://github.com/ArtifexSoftware/urw-base35-fonts), [D050000L](https://ctan.org/pkg/d050000l)
+Font sources: [URW++ Core 35 Fonts](https://github.com/ArtifexSoftware/urw-base35-fonts), [D050000L](https://ctan.org/pkg/d050000l), [Noto](https://notofonts.github.io/)
 
 Please refer to the respective repositories for full license texts.
 
@@ -61,21 +63,23 @@ will return somthing like:
 {"msg":"Service is running","success":true,"version":"1.1.3"}
 ```
 
-## Adding global styles and fallback fonts
+## Fonts and Multi-Script Support
 
-The service will read a file `additional_head_data.html` in the same folder as the service container and prepend it to the `<head>` element of every processed HTML page. You can use this file for adding global metadata, styling, or providing global fallback fonts. This could look like this:
+Due to the focus on PDF/A compliance, every font in use must be embedded in the PDF. We ensure this with two measures:
 
-```
-<style>
-html { font-family: fallback; }
-@font-face {
-	font-family: fallback;
-	src: url('file:///app/fonts/fallback.ttf');
-}
-</style>
-```
+1. set a `font-family` on the `html` element with a list of fallback fonts (Nimbus Roman, Noto fonts) for many commonly used scripts
 
-**Note:** The service is configured to produce PDFs that conform to the PDF/A and PDF/UA standards. A side effect is the requirement to have all used fonts embedded. If an unknown font (or no font-family at all) is encountered, openhtmltopdf will ignore all text set in this font completely (that is, the text will not be in the resulting PDF at all). Therefore we advise to provide some kind of fallback.
+2. replace all occurences of `sans-serif`, `serif` and `monospace` in `font-family` CSS properties with `...-fallback`, and load the appropriate fonts with those names
+
+This enables us to provide support for a great range of characters. You might still run into issues for one of the following reasons:
+
+1. use a font that was not uploaded with the HTML file
+
+2. set `font-family` to a generic name (`sans-serif`, `serif`, `monospace`) in other content, e.g., SVG files
+
+3. use very recent Unicode code points, e.g., the newest emojis, that are not yet embedded in the font files
+
+4. use scripts that are not part of our fallback stack, e.g., ancient scripts
 
 ## "bshtml2pdf" compatibility
 The old "bshtml2pdf" service ran servlets on a Tomcat server and hat `/BShtml2PDF` as the base URL. This service runs standalone and therefore lacks the `/BShtml2PDF` base URL. The client implementation must be adjusted accordingly.
