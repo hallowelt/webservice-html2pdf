@@ -84,17 +84,21 @@ public class MainController {
 	private static final Logger logger = LoggerFactory.getLogger(MainController.class);
 
 	/**
-	 * Matches CSS {@code font-family} and {@code font} shorthand declarations,
-	 * capturing the property prefix (group 1) and the value (group 2) separately so
-	 * that only the value is rewritten by {@link #rewriteGenericFontFamilies(String)}.
+	 * Matches either a complete CSS {@code @font-face} block (group 1) or a
+	 * {@code font-family}/{@code font} shorthand declaration outside such a block,
+	 * capturing the property prefix (group 2) and the value (group 3).
 	 *
-	 * <p>The pattern {@code font(?:-family)?} matches {@code font} and
+	 * <p>The {@code @font-face} alternative is listed first so that any
+	 * {@code font-family} property inside a {@code @font-face} rule is consumed by
+	 * group 1 and is therefore never seen by the rewriting logic.
+	 *
+	 * <p>The property pattern {@code font(?:-family)?} matches {@code font} and
 	 * {@code font-family} but never {@code font-size}, {@code font-weight}, etc.,
 	 * because those properties have a further {@code -} suffix that prevents the
 	 * trailing {@code \\s*:} from matching.
 	 */
 	private static final Pattern FONT_DECLARATION_PATTERN = Pattern.compile(
-		"(font(?:-family)?\\s*:\\s*)([^;}]+)",
+		"(@font-face\\s*\\{[^}]*\\})|(font(?:-family)?\\s*:\\s*)([^;}]+)",
 		Pattern.CASE_INSENSITIVE
 	);
 
@@ -390,6 +394,9 @@ public class MainController {
 	 *
 	 * <p>The replacement is scoped to declaration values only, so occurrences inside
 	 * URL paths, comments, or other CSS constructs are left untouched.
+	 * {@code @font-face} blocks are passed through unchanged — the {@code font-family}
+	 * property inside them declares a font name rather than selecting a font, so it
+	 * must never be rewritten.
 	 * Within {@code font} shorthand values the keyword pattern only matches the five
 	 * specific generic family tokens — not font-weight keywords, sizes, etc. — so
 	 * co-existing values like {@code bold} or {@code 14px} are preserved as-is.
@@ -403,13 +410,18 @@ public class MainController {
 		StringBuffer sb = new StringBuffer();
 		String fallbackFontFamilies = fallbackFontMapping.getFontFamilyNames();
 		while (m.find()) {
-			String prefix = m.group(1);
-			String value = m.group(2);
-			String rewrittenValue = GENERIC_FONT_FAMILY_PATTERN.matcher(value).replaceAll("$1-fallback");
-			if (!fallbackFontFamilies.isEmpty()) {
-				rewrittenValue = rewrittenValue.stripTrailing() + ", " + fallbackFontFamilies;
+			if (m.group(1) != null) {
+				// @font-face block — keep entirely unchanged
+				m.appendReplacement(sb, Matcher.quoteReplacement(m.group(1)));
+			} else {
+				String prefix = m.group(2);
+				String value = m.group(3);
+				String rewrittenValue = GENERIC_FONT_FAMILY_PATTERN.matcher(value).replaceAll("$1-fallback");
+				if (!fallbackFontFamilies.isEmpty()) {
+					rewrittenValue = rewrittenValue.stripTrailing() + ", " + fallbackFontFamilies;
+				}
+				m.appendReplacement(sb, Matcher.quoteReplacement(prefix + rewrittenValue));
 			}
-			m.appendReplacement(sb, Matcher.quoteReplacement(prefix + rewrittenValue));
 		}
 		m.appendTail(sb);
 		return sb.toString();
