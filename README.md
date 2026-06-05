@@ -65,21 +65,34 @@ will return somthing like:
 
 ## Fonts and Multi-Script Support
 
-Due to the focus on PDF/A compliance, every font in use must be embedded in the PDF. We ensure this with two measures:
+Due to the focus on PDF/A compliance, every font in use must be embedded in the
+PDF. We ensure this with three measures:
 
-1. set a `font-family` on the `html` element with a list of fallback fonts (Nimbus Roman, Noto fonts) for many commonly used scripts
+1. set a `font-family` on the `html` element with a list of fallback fonts
+	(Nimbus Roman, Noto fonts) for many commonly used scripts
 
-2. replace all occurences of `sans-serif`, `serif` and `monospace` in `font-family` CSS properties with `...-fallback`, and load the appropriate fonts with those names
+2. replace all occurences of `sans-serif`, `serif` and `monospace` in
+	`font-family` CSS properties with `...-fallback`, and load the appropriate
+	fonts with those names
 
-This enables us to provide support for a great range of characters. You might still run into issues for one of the following reasons:
+3. append fallback fonts to all occurences of `font-family` in CSS and `<style>`
+	elements
 
-1. use a font that was not uploaded with the HTML file
+This enables us to provide support for a large range of characters. You might
+still run into issues for one of the following reasons:
 
-2. set `font-family` to a generic name (`sans-serif`, `serif`, `monospace`) in other content, e.g., SVG files
+1. use a font that was not uploaded with the HTML file (or provided by the service)
 
-3. use very recent Unicode code points, e.g., the newest emojis, that are not yet embedded in the font files
+2. set `font-family` to a generic name (`sans-serif`, `serif`, `monospace`) in
+	other content, e.g., SVG files
+
+3. use very recent Unicode code points, e.g., the newest emojis, that are not
+	yet embedded in the font files
 
 4. use scripts that are not part of our fallback stack, e.g., ancient scripts
+
+To mitigate these problems you will need to provide your own fonts and carefully
+craft your `font-family` CSS declarations, so that each glyph is found reliably.
 
 ## "bshtml2pdf" compatibility
 The old "bshtml2pdf" service ran servlets on a Tomcat server and hat `/BShtml2PDF` as the base URL. This service runs standalone and therefore lacks the `/BShtml2PDF` base URL. The client implementation must be adjusted accordingly.
