@@ -1,6 +1,5 @@
 package com.hallowelt.mediawiki.services.html2pdf;
 
-import com.openhtmltopdf.extend.FSSupplier;
 import com.openhtmltopdf.outputdevice.helper.BaseRendererBuilder.FontStyle;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 
@@ -23,7 +22,7 @@ public class BaseFontMapping {
 	 * a {@code font-family} attribute (e.g. {@code "Helvetica"}), while
 	 * {@code cssName} is the exact name registered with the PDF renderer
 	 * (e.g. {@code "Helvetica-Bold"}).  They differ for weight/style variants
-	 * and are equal for the base entry of each family.
+	 * and are equal for the base entry of each family and for all fallback fonts.
 	 */
 	public static class FontInfo {
 		public final String cssName;
@@ -38,6 +37,14 @@ public class BaseFontMapping {
 			this.weight = weight;
 			this.style = style;
 			this.resourcePath = resourcePath;
+		}
+
+		/**
+		 * Returns the CSS name with single-quotes escaped, suitable for use
+		 * inside a single-quoted CSS string (e.g. a {@code font-family} value).
+		 */
+		public String cssNameSingleQuoteEscaped() {
+			return cssName.replace("'", "\\'");
 		}
 	}
 
@@ -94,12 +101,21 @@ public class BaseFontMapping {
 	/**
 	 * Registers the Base-14 fonts with the PDF renderer builder so that they
 	 * are embedded in the output PDF.
+	 *
+	 * <p>Note: font availability is also covered by the {@code @font-face} CSS
+	 * injected via {@link #extractFontsAndGenerateCSS}, which feeds both the
+	 * PDF font resolver and Batik's SVG font resolver from the same rule set.
+	 * This method is therefore technically redundant, but kept as a resilience
+	 * layer: if font file extraction fails at startup the classpath-based
+	 * suppliers registered here ensure that HTML text still renders correctly
+	 * under PDF/A even when the disk-backed {@code @font-face} rules are
+	 * unavailable.
 	 */
 	public static void registerFonts(PdfRendererBuilder builder) {
 		for (FontInfo fi : FONT_ENTRIES) {
-			FSSupplier<InputStream> supplier = () ->
-				BaseFontMapping.class.getResourceAsStream(fi.resourcePath);
-			builder.useFont(supplier, fi.cssName);
+			builder.useFont(
+				() -> BaseFontMapping.class.getResourceAsStream(fi.resourcePath),
+				fi.cssName, fi.weight, fi.style, true);
 		}
 	}
 
