@@ -349,6 +349,10 @@ public class MainController {
 			// * font-family:Wingdings;mso-fareast-font-family:Wingdings;mso-bidi-font-family:Wingdings
 			// * mso-list:Ignore
 			// * font:7.0pt "Times New Roman"
+			//
+			// Examples of things to keep/rewrite:
+			// * font-family:Helvetica => font-family:Helvetica
+			// * font: serif => font: serif-fallback
 			String[] parts = normalizedStyle.split(";");
 			List<String> sanitizedParts = new ArrayList<>();
 			for (int i = 0; i < parts.length; i++) {
@@ -365,6 +369,23 @@ public class MainController {
 				if (normalizedProperty.equals("font-family")
 					||normalizedProperty.equals("font")
 					||normalizedProperty.startsWith("mso-")) {
+					Boolean isBaseFontFamily = false;
+					for (String baseFont : BaseFontMapping.BASE_14_TO_TTF.keySet()) {
+						if (normalizedValue.equals(baseFont.toLowerCase())) {
+							isBaseFontFamily = true;
+							break;
+						}
+						if ((normalizedValue + "-fallback").equals(baseFont.toLowerCase())) {
+							isBaseFontFamily = true;
+							value = value + "-fallback";
+							break;
+						}
+					}
+					if (isBaseFontFamily) {
+						sanitizedParts.add(property + ": " + value);
+						logger.info("Sanitize: rewrite font-family: " + property + ":" + value);
+						continue;
+					}
 					logger.debug("Sanitize: remove property: " + normalizedProperty + ":" + normalizedValue);
 					continue;
 				}
