@@ -25,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.w3c.dom.Document;
 
+import com.openhtmltopdf.bidi.support.ICUBidiReorderer;
+import com.openhtmltopdf.bidi.support.ICUBidiSplitter;
 import com.openhtmltopdf.extend.FSCacheEx;
 import com.openhtmltopdf.extend.FSCacheValue;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceControlPriority;
@@ -96,9 +98,13 @@ public class MainController {
 	 * {@code font-family} but never {@code font-size}, {@code font-weight}, etc.,
 	 * because those properties have a further {@code -} suffix that prevents the
 	 * trailing {@code \\s*:} from matching.
+	 *
+	 * <p>A negative look-behind {@code (?<![\\w-])} anchors the match so that
+	 * {@code font} is only recognised as a property name, not as a suffix inside
+	 * selectors or other identifiers (e.g. {@code .ico-font::before}).
 	 */
 	private static final Pattern FONT_DECLARATION_PATTERN = Pattern.compile(
-		"(@font-face\\s*\\{[^}]*\\})|(font(?:-family)?\\s*:\\s*)([^;}]+)",
+		"(@font-face\\s*\\{[^}]*\\})|(?<![\\w-])(font(?:-family)?\\s*:\\s*)([^;}]+)",
 		Pattern.CASE_INSENSITIVE
 	);
 
@@ -169,6 +175,9 @@ public class MainController {
 			builder.useFastMode();
 			builder.usePdfUaAccessibility(true);
 			builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_3_U);
+			builder.useUnicodeBidiSplitter(new ICUBidiSplitter.ICUBidiSplitterFactory());
+			builder.useUnicodeBidiReorderer(new ICUBidiReorderer());
+			builder.defaultTextDirection(PdfRendererBuilder.TextDirection.LTR);
 			builder.useSVGDrawer(new BatikSVGDrawer());
 			builder.useExternalResourceAccessControl(
 				(uri, type) -> {
@@ -416,9 +425,16 @@ public class MainController {
 			} else {
 				String prefix = m.group(2);
 				String value = m.group(3);
-				String rewrittenValue = GENERIC_FONT_FAMILY_PATTERN.matcher(value).replaceAll("$1-fallback");
+				boolean isImportant = value.strip().toLowerCase().endsWith("!important");
+				String workingValue = isImportant
+					? value.replaceAll("(?i)\\s*!important\\s*$", "")
+					: value;
+				String rewrittenValue = GENERIC_FONT_FAMILY_PATTERN.matcher(workingValue).replaceAll("$1-fallback");
 				if (!fallbackFontFamilies.isEmpty()) {
 					rewrittenValue = rewrittenValue.stripTrailing() + ", " + fallbackFontFamilies;
+				}
+				if (isImportant) {
+					rewrittenValue = rewrittenValue.stripTrailing() + " !important";
 				}
 				m.appendReplacement(sb, Matcher.quoteReplacement(prefix + rewrittenValue));
 			}
