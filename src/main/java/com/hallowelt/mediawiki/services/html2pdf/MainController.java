@@ -47,6 +47,16 @@ public class MainController {
 	private FallbackFontMapping fallbackFontMapping = new FallbackFontMapping();
 
 	/**
+	 * CSS snippet containing {@code @font-face} rules for all Base-14 fonts,
+	 * injected into every rendered document so that Apache Batik's SVG font
+	 * resolver can locate the correct font files.
+	 *
+	 * <p>Populated once in the constructor by extracting font resources from
+	 * the classpath to {@code <tempDir>/fonts/}.
+	 */
+	private String baseFontFaceCSS = "";
+
+	/**
 	 * Persistent font metrics cache shared across all PDF render requests.
 	 * Populated by the static classpath fonts (Base 14 and Noto fallback fonts).
 	 * User-uploaded fonts referenced via CSS {@code @font-face} do not interact
@@ -138,6 +148,13 @@ public class MainController {
 		tempPathFile = new File(tempPath);
 		if (!tempPathFile.exists()) {
 			tempPathFile.mkdirs();
+		}
+
+		File fontsDir = new File(tempPathFile, "fonts");
+		try {
+			baseFontFaceCSS = BaseFontMapping.extractFontsAndGenerateCSS(fontsDir);
+		} catch (Exception e) {
+			logger.error("Failed to extract Base-14 fonts for SVG rendering", e);
 		}
 	}
 
@@ -410,7 +427,7 @@ public class MainController {
 			}
 		}
 
-		doc.select("head").prepend("<style>html{font-family:serif-fallback," + fallbackFontMapping.getFontFamilyNames() + "}</style>");
+		doc.select("head").prepend("<style>" + baseFontFaceCSS + "html{font-family:serif-fallback," + fallbackFontMapping.getFontFamilyNames() + "}</style>");
 	}
 
 	/**
