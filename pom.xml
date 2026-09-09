@@ -29,7 +29,8 @@
 	</scm>
 	<properties>
 		<java.version>25</java.version>
-		<openhtml.version>1.1.37</openhtml.version>
+		<!-- 1.1.37 has issue #214: rowspan cells inside <thead> lose background/border, fixed in 1.1.74 -->
+		<openhtml.version>1.1.85</openhtml.version>
 		<!-- Spring Boot 4.1.1 uses Tomcat 11.0.24, but CVEs CVE-2026-65182, CVE-2026-65905 and CVE-2026-68525 are only fixed in 11.0.25 -->
 		<tomcat.version>11.0.25</tomcat.version>
 	</properties>
