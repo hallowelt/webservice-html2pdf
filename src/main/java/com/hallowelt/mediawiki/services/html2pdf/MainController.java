@@ -72,7 +72,7 @@ public class MainController {
 
 		@Override
 		public FSCacheValue get(String key, Callable<? extends FSCacheValue> loader) {
-			FSCacheValue cached = store.get(key);
+			FSCacheValue cached = get(key);
 			if (cached != null) {
 				return cached;
 			}
@@ -89,6 +89,10 @@ public class MainController {
 
 		@Override
 		public FSCacheValue get(String key) {
+			FSCacheValue override = fallbackFontMapping.getMetricsOverride(key);
+			if (override != null) {
+				return override;
+			}
 			return store.get(key);
 		}
 	};
