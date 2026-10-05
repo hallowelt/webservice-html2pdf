@@ -11,6 +11,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -26,10 +28,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.w3c.dom.Document;
 
+import com.openhtmltopdf.bidi.support.ICUBidiReorderer;
+import com.openhtmltopdf.bidi.support.ICUBidiSplitter;
+import com.openhtmltopdf.extend.FSCacheEx;
+import com.openhtmltopdf.extend.FSCacheValue;
 import com.openhtmltopdf.mathmlsupport.MathMLDrawer;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceControlPriority;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceType;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
+import com.openhtmltopdf.pdfboxout.PdfRendererBuilder.CacheStore;
 import com.openhtmltopdf.svgsupport.BatikSVGDrawer;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,7 +48,120 @@ public class MainController {
 
 	private File tempPathFile = null;
 
+	private FallbackFontMapping fallbackFontMapping = new FallbackFontMapping();
+
+	/**
+	 * CSS snippet containing {@code @font-face} rules for all Base-14 fonts,
+	 * injected into every rendered document so that Apache Batik's SVG font
+	 * resolver can locate the correct font files.
+	 *
+	 * <p>Populated once in the constructor by extracting font resources from
+	 * the classpath to {@code <tempDir>/fonts/}.
+	 */
+	private String baseFontFaceCSS = "";
+
+	/**
+	 * Persistent font metrics cache shared across all PDF render requests.
+	 * Populated by the static classpath fonts (Base 14 and Noto fallback fonts).
+	 * User-uploaded fonts referenced via CSS {@code @font-face} do not interact
+	 * with this cache and are therefore never stored here.
+	 */
+	private final FSCacheEx<String, FSCacheValue> fontMetricsCache = new FSCacheEx<String, FSCacheValue>() {
+		private final ConcurrentHashMap<String, FSCacheValue> store = new ConcurrentHashMap<>();
+
+		@Override
+		public void put(String key, FSCacheValue value) {
+			store.put(key, value);
+		}
+
+		@Override
+		public FSCacheValue get(String key, Callable<? extends FSCacheValue> loader) {
+			FSCacheValue cached = get(key);
+			if (cached != null) {
+				return cached;
+			}
+			try {
+				FSCacheValue value = loader.call();
+				if (value != null) {
+					store.put(key, value);
+				}
+				return value;
+			} catch (Exception e) {
+				return null;
+			}
+		}
+
+		@Override
+		public FSCacheValue get(String key) {
+			FSCacheValue override = fallbackFontMapping.getMetricsOverride(key);
+			if (override != null) {
+				return override;
+			}
+			return store.get(key);
+		}
+	};
+
 	private static final Logger logger = LoggerFactory.getLogger(MainController.class);
+
+	/**
+	 * Matches either a complete CSS {@code @font-face} block (group 1) or a
+	 * {@code font-family}/{@code font} shorthand declaration outside such a block,
+	 * capturing the property prefix (group 2) and the value (group 3).
+	 *
+	 * <p>The {@code @font-face} alternative is listed first so that any
+	 * {@code font-family} property inside a {@code @font-face} rule is consumed by
+	 * group 1 and is therefore never seen by the rewriting logic.
+	 *
+	 * <p>The property pattern {@code font(?:-family)?} matches {@code font} and
+	 * {@code font-family} but never {@code font-size}, {@code font-weight}, etc.,
+	 * because those properties have a further {@code -} suffix that prevents the
+	 * trailing {@code \\s*:} from matching.
+	 *
+	 * <p>A negative look-behind {@code (?<![\\w-])} anchors the match so that
+	 * {@code font} is only recognised as a property name, not as a suffix inside
+	 * selectors or other identifiers (e.g. {@code .ico-font::before}).
+	 */
+	private static final Pattern FONT_DECLARATION_PATTERN = Pattern.compile(
+		"(@font-face\\s*\\{[^}]*\\})|(?<![\\w-])(font(?:-family)?\\s*:\\s*)([^;}]+)",
+		Pattern.CASE_INSENSITIVE
+	);
+
+	/**
+	 * Matches a CSS {@code @font-face} at-rule block.  Used by
+	 * {@link #cleanFontFaceUrls} to scope URL normalisation to font declarations
+	 * only, leaving the rest of the stylesheet untouched.
+	 */
+	private static final Pattern FONT_FACE_BLOCK_PATTERN = Pattern.compile(
+		"@font-face\\s*\\{[^}]*\\}",
+		Pattern.CASE_INSENSITIVE
+	);
+
+	/**
+	 * Matches a CSS {@code url()} function with optional surrounding single/double
+	 * quotes and arbitrary internal whitespace, capturing the raw URL content as
+	 * group 1.
+	 */
+	private static final Pattern CSS_URL_PATTERN = Pattern.compile(
+		"url\\(\\s*['\"]?([^'\"\\)]*?)['\"]?\\s*\\)",
+		Pattern.CASE_INSENSITIVE
+	);
+
+	/**
+	 * Matches the five CSS generic font-family keywords as whole tokens, guarded by
+	 * negative look-behind/ahead so that:
+	 * <ul>
+	 *   <li>{@code serif} inside {@code sans-serif} is not matched (the preceding
+	 *       {@code -} triggers the look-behind);</li>
+	 *   <li>already-rewritten values (e.g. {@code sans-serif-fallback}) are not
+	 *       matched again (negative look-ahead {@code (?!-fallback)}).</li>
+	 * </ul>
+	 * {@code sans-serif} must appear before {@code serif} in the alternation so the
+	 * longer token is tried first.
+	 */
+	private static final Pattern GENERIC_FONT_FAMILY_PATTERN = Pattern.compile(
+		"(?<![a-zA-Z0-9-])(sans-serif|serif|monospace|cursive|fantasy)(?!-fallback)(?![a-zA-Z0-9-])",
+		Pattern.CASE_INSENSITIVE
+	);
 
 	public MainController() {
 		registerSTIXFonts();
@@ -59,6 +179,13 @@ public class MainController {
 		if (!tempPathFile.exists()) {
 			tempPathFile.mkdirs();
 		}
+
+		File fontsDir = new File(tempPathFile, "fonts");
+		try {
+			baseFontFaceCSS = BaseFontMapping.extractFontsAndGenerateCSS(fontsDir);
+		} catch (Exception e) {
+			logger.error("Failed to extract Base-14 fonts for SVG rendering", e);
+		}
 	}
 
 	@GetMapping("/")
@@ -66,7 +193,7 @@ public class MainController {
 		Map<String, Object> response = new HashMap<>();
 		response.put("success", true);
 		response.put("msg", "Service is running");
-		response.put( "version", "1.1.1");
+		response.put( "version", "2.2.2");
 		return response;
 	}
 
@@ -109,13 +236,20 @@ public class MainController {
 
 			PdfRendererBuilder builder = new PdfRendererBuilder();
 
+			builder.useCacheStore(CacheStore.PDF_FONT_METRICS, fontMetricsCache);
+
 			BaseFontMapping.registerFonts(builder);
+			fallbackFontMapping.registerFallbackFonts(builder);
 
 			builder.useFastMode();
 			builder.usePdfUaAccessibility(true);
 			builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_3_U);
-			builder.useSVGDrawer(new BatikSVGDrawer());
-			builder.useMathMLDrawer(new MathMLDrawer());
+			builder.useUnicodeBidiSplitter(new ICUBidiSplitter.ICUBidiSplitterFactory());
+			builder.useUnicodeBidiReorderer(new ICUBidiReorderer());
+			builder.defaultTextDirection(PdfRendererBuilder.TextDirection.LTR);
+			builder.useSVGDrawer(new BatikSVGDrawer(BatikSVGDrawer.SvgScriptMode.SECURE, java.util.Set.of("data")));
+      builder.useMathMLDrawer(new MathMLDrawer());
+
 			builder.useExternalResourceAccessControl(
 				(uri, type) -> {
 					return this.allowFileEmbed(uri, type);
@@ -272,7 +406,8 @@ public class MainController {
 			input.replaceWith(span);
 		}
 
-		// We need to strip all unsupported font-families from inline CSS styles
+		// We need to rewrite generic font-family keywords and strip mso-* properties
+		// from inline CSS styles.
 		Elements styledElements = doc.select("[style]");
 		for (org.jsoup.nodes.Element el : styledElements) {
 			String style = el.attr("style");
@@ -283,9 +418,14 @@ public class MainController {
 				.trim();
 
 			// Examples of things to strip
-			// * font-family:Wingdings;mso-fareast-font-family:Wingdings;mso-bidi-font-family:Wingdings
+			// * mso-fareast-font-family:Wingdings;mso-bidi-font-family:Wingdings
 			// * mso-list:Ignore
-			// * font:7.0pt "Times New Roman"
+			//
+			// Examples of things to rewrite (generic keywords → -fallback + Noto chain):
+			// * font-family:Helvetica             => font-family:Helvetica
+			// * font-family:monospace             => font-family:monospace-fallback, [Noto]
+			// * font-family:'Courier New',monospace => font-family:'Courier New',monospace-fallback,[Noto]
+			// * font: serif                       => font: serif-fallback, [Noto]
 			String[] parts = normalizedStyle.split(";");
 			List<String> sanitizedParts = new ArrayList<>();
 			for (int i = 0; i < parts.length; i++) {
@@ -297,12 +437,24 @@ public class MainController {
 				String property = rule[0].trim();
 				String normalizedProperty = property.toLowerCase();
 				String value = rule[1].trim();
-				String normalizedValue = value.toLowerCase();
 
-				if (normalizedProperty.equals("font-family")
-					||normalizedProperty.equals("font")
-					||normalizedProperty.startsWith("mso-")) {
-					logger.debug("Sanitize: remove property: " + normalizedProperty + ":" + normalizedValue);
+				if (normalizedProperty.startsWith("mso-")) {
+					logger.debug("Sanitize: remove mso property: " + normalizedProperty);
+					continue;
+				}
+
+				if (normalizedProperty.equals("font-family") || normalizedProperty.equals("font")) {
+					// Re-use the same CSS rewriting logic applied to stylesheet files so
+					// that any generic keyword (monospace, serif, …) — whether alone or
+					// buried in a multi-value list — gets the -fallback suffix and the
+					// Noto fallback chain appended.  Unknown named fonts (e.g. 'Courier
+					// New') are left in place; openhtmltopdf skips fonts it cannot
+					// resolve and tries the next entry in the list.
+					String rewritten = rewriteGenericFontFamilies(property + ": " + value + ";");
+					// rewriteGenericFontFamilies returns the whole "prop: value;" string
+					String rewrittenValue = rewritten.replaceFirst("(?i)^[^:]+:\\s*", "").replaceFirst(";$", "").trim();
+					sanitizedParts.add(property + ": " + rewrittenValue);
+					logger.info("Sanitize: rewrite font-family: " + property + ":" + rewrittenValue);
 					continue;
 				}
 
@@ -315,6 +467,100 @@ public class MainController {
 				el.attr("style", sanitizedStyle);
 			}
 		}
+
+		Elements styleElements = doc.select("style");
+		for (org.jsoup.nodes.Element el : styleElements) {
+			String css = el.text();
+			String rewrittenCss = rewriteGenericFontFamilies(cleanFontFaceUrls(css));
+			if (!css.equals(rewrittenCss)) {
+				logger.debug("Sanitize: update font-family in style element");
+				el.text(rewrittenCss);
+			}
+		}
+
+		doc.select("head").prepend("<style>" + baseFontFaceCSS + "html{font-family:serif-fallback," + fallbackFontMapping.getFontFamilyNames() + "}</style>");
+	}
+
+	/**
+	 * Normalises {@code url()} references inside every {@code @font-face} block
+	 * in {@code content}:
+	 * <ul>
+	 *   <li>Trims leading/trailing whitespace from URL values — openhtmltopdf's
+	 *       CSS lexer strips {@code \t\r\n\f} but not plain spaces, so spaces
+	 *       would reach {@code java.net.URI(String)} and trigger a
+	 *       {@code URISyntaxException}.</li>
+	 *   <li>Strips cache-busting query strings ({@code ?hash}) and fragments
+	 *       ({@code #iefix}) — they are meaningless for {@code file://} URIs and
+	 *       openhtmltopdf's resolver rejects them as illegal URI characters.</li>
+	 * </ul>
+	 * Only {@code @font-face} blocks are modified; the rest of the stylesheet is
+	 * passed through unchanged, so {@code url(#svg-id)} references outside font
+	 * declarations are not affected.
+	 *
+	 * @param content raw CSS text
+	 * @return CSS text with cleaned {@code @font-face} URL references
+	 */
+	private String cleanFontFaceUrls(String content) {
+		Matcher fm = FONT_FACE_BLOCK_PATTERN.matcher(content);
+		StringBuffer sb = new StringBuffer();
+		while (fm.find()) {
+			String block = fm.group(0);
+			String cleaned = CSS_URL_PATTERN.matcher(block).replaceAll(um -> {
+				String path = um.group(1).trim();
+				int q = path.indexOf('?');
+				if (q >= 0) path = path.substring(0, q);
+				int h = path.indexOf('#');
+				if (h >= 0) path = path.substring(0, h);
+				return "url(" + Matcher.quoteReplacement(path) + ")";
+			});
+			fm.appendReplacement(sb, Matcher.quoteReplacement(cleaned));
+		}
+		fm.appendTail(sb);
+		return sb.toString();
+	}
+
+	/**
+	 * Rewrites the five CSS generic font-family keywords ({@code serif},
+	 * {@code sans-serif}, {@code monospace}, {@code cursive}, {@code fantasy}) to
+	 * their {@code -fallback}-suffixed counterparts within {@code font-family} and
+	 * {@code font} shorthand declarations found in {@code content}.
+	 * The Noto fallback chain is appended to every matched value.
+	 *
+	 * <p>The replacement is scoped to declaration values only — occurrences inside
+	 * URL paths, comments, or other CSS constructs are left untouched.
+	 * {@code @font-face} blocks are passed through unchanged.
+	 *
+	 * @param content raw CSS text
+	 * @return the content with generic font-family keywords postfixed by
+	 *         {@code -fallback} and the fallback chain appended
+	 */
+	private String rewriteGenericFontFamilies(String content) {
+		Matcher m = FONT_DECLARATION_PATTERN.matcher(content);
+		StringBuffer sb = new StringBuffer();
+		String fallbackFontFamilies = fallbackFontMapping.getFontFamilyNames();
+		while (m.find()) {
+			if (m.group(1) != null) {
+				// @font-face block — keep entirely unchanged
+				m.appendReplacement(sb, Matcher.quoteReplacement(m.group(1)));
+			} else {
+				String prefix = m.group(2);
+				String value = m.group(3);
+				boolean isImportant = value.strip().toLowerCase().endsWith("!important");
+				String workingValue = isImportant
+					? value.replaceAll("(?i)\\s*!important\\s*$", "")
+					: value;
+				String rewrittenValue = GENERIC_FONT_FAMILY_PATTERN.matcher(workingValue).replaceAll("$1-fallback");
+				if (!fallbackFontFamilies.isEmpty()) {
+					rewrittenValue = rewrittenValue.stripTrailing() + ", " + fallbackFontFamilies;
+				}
+				if (isImportant) {
+					rewrittenValue = rewrittenValue.stripTrailing() + " !important";
+				}
+				m.appendReplacement(sb, Matcher.quoteReplacement(prefix + rewrittenValue));
+			}
+		}
+		m.appendTail(sb);
+		return sb.toString();
 	}
 
 	private void deleteDirectory(File directroy) {
@@ -394,7 +640,14 @@ public class MainController {
 				Map<String, Object> fileObject = new HashMap<>();
 				File fileToSave = new File(typePath, submittedFileName);
 				try {
-					part.write(fileToSave.getAbsolutePath());
+					if (submittedFileName.toLowerCase().endsWith(".css")) {
+						String cssContent = org.apache.commons.io.IOUtils.toString(part.getInputStream(), "UTF-8");
+						String rewrittenContent = rewriteGenericFontFamilies(cleanFontFaceUrls(cssContent));
+						org.apache.commons.io.FileUtils.writeStringToFile(fileToSave, rewrittenContent, "UTF-8");
+						logger.info("Saved CSS with rewritten generic font families: " + fileToSave.getAbsolutePath());
+					} else {
+						part.write(fileToSave.getAbsolutePath());
+					}
 					fileObject.put("fieldName", fieldName);
 					fileObject.put("fileName", submittedFileName);
 					fileObject.put("contentType", part.getContentType());
