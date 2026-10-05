@@ -1,7 +1,10 @@
 package com.hallowelt.mediawiki.services.html2pdf;
 
+import java.awt.Font;
+import java.awt.GraphicsEnvironment;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -29,6 +32,7 @@ import com.openhtmltopdf.bidi.support.ICUBidiReorderer;
 import com.openhtmltopdf.bidi.support.ICUBidiSplitter;
 import com.openhtmltopdf.extend.FSCacheEx;
 import com.openhtmltopdf.extend.FSCacheValue;
+import com.openhtmltopdf.mathmlsupport.MathMLDrawer;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceControlPriority;
 import com.openhtmltopdf.outputdevice.helper.ExternalResourceType;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
@@ -160,6 +164,8 @@ public class MainController {
 	);
 
 	public MainController() {
+		registerSTIXFonts();
+
 		String tempPath = System.getProperty("html2pdf.temp.dir");
 		if (tempPath == null) {
 			tempPath = System.getenv("HTML2PDF_TEMP_DIR");
@@ -191,6 +197,28 @@ public class MainController {
 		return response;
 	}
 
+	private void registerSTIXFonts() {
+		String[] mathFonts = {
+			"/fonts/STIXTwoMath-Regular.ttf",
+			"/fonts/STIXTwoText-Regular.ttf",
+			"/fonts/STIXTwoText-Bold.ttf",
+			"/fonts/STIXTwoText-Italic.ttf",
+			"/fonts/STIXTwoText-BoldItalic.ttf"
+		};
+		GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+		for (String fontPath : mathFonts) {
+			try (InputStream is = getClass().getResourceAsStream(fontPath)) {
+				if (is == null) {
+					logger.warn("Math font resource not found: " + fontPath);
+					continue;
+				}
+				ge.registerFont(Font.createFont(Font.TRUETYPE_FONT, is));
+			} catch (Exception e) {
+				logger.warn("Could not register math font: " + fontPath, e);
+			}
+		}
+	}
+
 	// Returns application/pdf
 	@PostMapping("/RenderPDF")
 	public void renderPDF(
@@ -220,6 +248,8 @@ public class MainController {
 			builder.useUnicodeBidiReorderer(new ICUBidiReorderer());
 			builder.defaultTextDirection(PdfRendererBuilder.TextDirection.LTR);
 			builder.useSVGDrawer(new BatikSVGDrawer(BatikSVGDrawer.SvgScriptMode.SECURE, java.util.Set.of("data")));
+			builder.useMathMLDrawer(new MathMLDrawer());
+
 			builder.useExternalResourceAccessControl(
 				(uri, type) -> {
 					return this.allowFileEmbed(uri, type);

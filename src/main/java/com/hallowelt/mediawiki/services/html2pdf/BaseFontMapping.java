@@ -80,7 +80,14 @@ public class BaseFontMapping {
 
 		// Symbol & Dingbats
 		new FontInfo("Symbol",      "Symbol",      400, FontStyle.NORMAL, "/fonts/StandardSymbolsPS.ttf"),
-		new FontInfo("ZapfDingbats", "ZapfDingbats", 400, FontStyle.NORMAL, "/fonts/D050000L.ttf")
+		new FontInfo("ZapfDingbats", "ZapfDingbats", 400, FontStyle.NORMAL, "/fonts/D050000L.ttf"),
+    
+		// Math formula
+		new FontInfo("STIXTwoMath", "STIXTwoMath", 400, FontStyle.NORMAL, "/fonts/STIXTwoText-Regular.ttf"),
+		new FontInfo("STIXTwoText", "STIXTwoText", 400, FontStyle.NORMAL, "/fonts/STIXTwoText-Regular.ttf"),
+		new FontInfo("STIXTwoText-Bold", "STIXTwoText-Bold", 400, FontStyle.NORMAL, "/fonts/STIXTwoText-Bold.ttf"),
+		new FontInfo("STIXTwoText-Italic", "STIXTwoText-Italic", 400, FontStyle.NORMAL, "/fonts/STIXTwoText-Italic.ttf"),
+		new FontInfo("STIXTwoText-BoldItalic", "STIXTwoText-BoldItalic", 400, FontStyle.NORMAL, "/fonts/STIXTwoText-BoldItalic.ttf")
 	);
 
 	/**
