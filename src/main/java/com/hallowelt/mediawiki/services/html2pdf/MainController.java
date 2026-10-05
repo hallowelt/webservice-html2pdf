@@ -248,7 +248,7 @@ public class MainController {
 			builder.useUnicodeBidiReorderer(new ICUBidiReorderer());
 			builder.defaultTextDirection(PdfRendererBuilder.TextDirection.LTR);
 			builder.useSVGDrawer(new BatikSVGDrawer(BatikSVGDrawer.SvgScriptMode.SECURE, java.util.Set.of("data")));
-      builder.useMathMLDrawer(new MathMLDrawer());
+			builder.useMathMLDrawer(new MathMLDrawer());
 
 			builder.useExternalResourceAccessControl(
 				(uri, type) -> {
