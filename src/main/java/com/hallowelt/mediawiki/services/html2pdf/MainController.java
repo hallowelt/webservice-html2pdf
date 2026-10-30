@@ -1,5 +1,6 @@
 package com.hallowelt.mediawiki.services.html2pdf;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -206,52 +207,75 @@ public class MainController {
 			File basePathFile = new File(wikiIdPath, documentToken);
 			File documentFile = new File(basePathFile, documentToken + ".html");
 
-			PdfRendererBuilder builder = new PdfRendererBuilder();
-
-			builder.useCacheStore(CacheStore.PDF_FONT_METRICS, fontMetricsCache);
-
-			BaseFontMapping.registerFonts(builder);
-			fallbackFontMapping.registerFallbackFonts(builder);
-
-			builder.useFastMode();
-			builder.usePdfUaAccessibility(true);
-			builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_3_U);
-			builder.useUnicodeBidiSplitter(new ICUBidiSplitter.ICUBidiSplitterFactory());
-			builder.useUnicodeBidiReorderer(new ICUBidiReorderer());
-			builder.defaultTextDirection(PdfRendererBuilder.TextDirection.LTR);
-			builder.useSVGDrawer(new BatikSVGDrawer(BatikSVGDrawer.SvgScriptMode.SECURE, java.util.Set.of("data")));
-			builder.useExternalResourceAccessControl(
-				(uri, type) -> {
-					return this.allowFileEmbed(uri, type);
-				},
-				ExternalResourceControlPriority.RUN_AFTER_RESOLVING_URI);
-			builder.useExternalResourceAccessControl(
-				(uri, type) -> {
-					return this.allowFileEmbed(uri, type);
-				},
-				ExternalResourceControlPriority.RUN_BEFORE_RESOLVING_URI);
-
 			logger.info("Document File: " + documentFile.getAbsolutePath());
-			Document doc = html5ParseDocument(documentFile);
-			builder.withW3cDocument(doc, documentFile.toURI().toASCIIString());
 
-			logger.debug("Start building PDF");
-			builder.toStream(response.getOutputStream());
-			builder.run();
-			logger.debug("Done building PDF");
+			byte[] pdf;
+			try {
+				pdf = render(documentFile, true);
+			} catch (Exception e) {
+				logger.warn(String.format(
+					"Error creating accessible PDF for (%s/%s), retrying without PDF/UA accessibility",
+					wikiId, documentToken), e);
+				pdf = render(documentFile, false);
+			}
 
 			response.setContentType("application/pdf");
 			response.setHeader("Content-Disposition", "attachment; filename=\"" + documentToken + ".pdf\"");
 			response.setHeader("Cache-Control", "no-cache");
 			response.setHeader("Pragma", "no-cache");
 			response.setHeader("Expires", "0");
+			response.setContentLength(pdf.length);
+			response.getOutputStream().write(pdf);
 
 			if (!debug) {
 				deleteDirectory(basePathFile);
 			}
 		} catch (Exception e) {
-			logger.error("Error creating PDF", e);
+			logger.error(String.format("Error creating PDF for (%s/%s)", wikiId, documentToken), e);
+			if (!response.isCommitted()) {
+				response.reset();
+				response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+			}
 		}
+	}
+
+	private byte[] render(File documentFile, boolean accessible) throws Exception {
+		PdfRendererBuilder builder = new PdfRendererBuilder();
+
+		builder.useCacheStore(CacheStore.PDF_FONT_METRICS, fontMetricsCache);
+
+		BaseFontMapping.registerFonts(builder);
+		fallbackFontMapping.registerFallbackFonts(builder);
+
+		builder.useFastMode();
+		if (accessible) {
+			builder.usePdfUaAccessibility(true);
+		}
+		builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_3_U);
+		builder.useUnicodeBidiSplitter(new ICUBidiSplitter.ICUBidiSplitterFactory());
+		builder.useUnicodeBidiReorderer(new ICUBidiReorderer());
+		builder.defaultTextDirection(PdfRendererBuilder.TextDirection.LTR);
+		builder.useSVGDrawer(new BatikSVGDrawer(BatikSVGDrawer.SvgScriptMode.SECURE, java.util.Set.of("data")));
+		builder.useExternalResourceAccessControl(
+			(uri, type) -> {
+				return this.allowFileEmbed(uri, type);
+			},
+			ExternalResourceControlPriority.RUN_AFTER_RESOLVING_URI);
+		builder.useExternalResourceAccessControl(
+			(uri, type) -> {
+				return this.allowFileEmbed(uri, type);
+			},
+			ExternalResourceControlPriority.RUN_BEFORE_RESOLVING_URI);
+
+		Document doc = html5ParseDocument(documentFile);
+		builder.withW3cDocument(doc, documentFile.toURI().toASCIIString());
+
+		logger.debug("Start building PDF (accessible=" + accessible + ")");
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		builder.toStream(out);
+		builder.run();
+		logger.debug("Done building PDF");
+		return out.toByteArray();
 	}
 
 	private Document html5ParseDocument(File htmlFile) throws IOException {
