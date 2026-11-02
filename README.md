@@ -12,48 +12,6 @@ To build the JAR file, run:
 mvn clean package
 ```
 
-### Identifying the running build
-
-Maven generates build metadata during `generate-resources`. Each build has a
-default timestamp-based ID and a build time. To assign an explicit diagnostic ID:
-
-```bash
-mvn -Djava.version=21 -Dhtml2pdf.build-id=pdf-debug-20261021-1 clean package
-```
-
-Use the Java version supported by your local environment and dependencies, or
-omit that override when using the project's configured JDK. Use a new build ID
-for each diagnostic build.
-
-After replacing the JAR, restart the service. Recreate the container if needed
-to refresh a single-file bind mount after the host JAR was replaced. A running
-JVM does not automatically load code from a newly compiled JAR.
-
-Query the service directly, for example:
-
-```bash
-curl http://localhost:8080/Html2PDF/v1/
-```
-
-The JSON response includes `version`, `buildId`, and `buildTime`. Render responses
-also carry `X-Html2PDF-Version`, `X-Html2PDF-Build-Id`, and
-`X-Html2PDF-Build-Time` headers, including handled renderer failures. These are
-headers from the Java service; a wiki proxy/export endpoint may not forward them.
-
-Every generated PDF embeds the same identity in its `Producer` metadata, without
-adding visible text or changing page layout. Open the PDF's document properties,
-or inspect a downloaded file with:
-
-```bash
-pdfinfo exported.pdf
-```
-
-Look for a producer such as
-`Html2PDF 2.2.3-SNAPSHOT; build=pdf-debug-20261021-1; built=...`.
-Matching this with the root endpoint proves which build generated that PDF.
-The render-start log entry includes the marker too. An unbuilt IDE launch without
-generated Maven metadata reports `development`/`unversioned` instead.
-
 ## Docker image
 Build the docker image with:
 ```bash
