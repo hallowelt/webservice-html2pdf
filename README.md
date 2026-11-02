@@ -93,55 +93,6 @@ composer update
 php test.php data/doc1/
 ```
 
-### Isolating textbox accessibility failures
-
-Compiling or redeploying the service does not by itself fix the textbox
-accessibility exception. The response-handling change only reports failures as
-HTTP 500 instead of an empty successful response.
-
-Two small fixtures compare the CSS-table textbox layout found in the captured
-Company history export with a block-layout alternative. They require no external
-stylesheets or images and do not disable PDF/UA accessibility.
-
-From `manual-testing`, run against the same service version that failed:
-
-```bash
-php test.php data/textbox-table http://localhost:8080/Html2PDF/v1
-php test.php data/textbox-block http://localhost:8080/Html2PDF/v1
-```
-
-Replace the service URL as needed. Compare the PDF responses and service logs.
-If the table fixture reproduces the accessibility exception and the block
-fixture succeeds, the textbox layout is isolated as a trigger. This is a
-diagnostic comparison, not a confirmed fix for every table-tagging failure.
-
-Alternatively, run the fixtures directly through the controller with Java tests
-from the service project directory. No running service or PHP client is needed:
-
-```bash
-mvn -Dtest=Html2PdfApplicationTests -Dhtml2pdf.textbox-diagnostic=true test
-```
-
-Add the same `-Djava.version=...` override used for a successful local build if
-needed. The diagnostic is skipped during ordinary builds. A failure names the
-fixture and logs the underlying renderer exception; both cases keep accessibility
-enabled. If both fixtures pass, the minimal textbox hypothesis is not sufficient
-and the complete document/pagination needs further investigation.
-
-To compare a captured document unchanged with a textbox block-layout variant:
-
-```bash
-mvn -Djava.version=21 -Dtest=Html2PdfApplicationTests \
-	-Dhtml2pdf.document-diagnostic=../PDFCreator/6b9bad19947604d14759d75c6c24fef3.html test
-```
-
-Adjust the Java version and captured file path as needed. The diagnostic does
-not modify the source HTML. It copies sibling `stylesheets`, `images`, and
-`attachments` directories when available, and reports missing asset directories.
-A passing test without the original assets does not establish that the complete
-document will render successfully. Test cases are named `captured-original` and
-`captured-block-textbox` in controller log entries.
-
 ## Liveness probing and version check
 To check if the service is responsive one can execute a HTTP request against the `servlet.context-path` (default `/Html2PDF/v1/`)
 
