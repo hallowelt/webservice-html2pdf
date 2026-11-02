@@ -1,7 +1,9 @@
 package com.hallowelt.mediawiki.services.html2pdf;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -19,6 +21,8 @@ import org.jsoup.parser.Parser;
 import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -41,6 +45,9 @@ import jakarta.servlet.http.Part;
 
 @RestController
 public class MainController {
+
+	@Autowired(required = false)
+	private BuildProperties buildProperties;
 
 	private File tempPathFile = null;
 
@@ -187,8 +194,34 @@ public class MainController {
 		Map<String, Object> response = new HashMap<>();
 		response.put("success", true);
 		response.put("msg", "Service is running");
-		response.put( "version", "2.2.3");
+		response.put("version", getServiceVersion());
+		response.put("buildId", getBuildId());
+		response.put("buildTime", getBuildTime());
 		return response;
+	}
+
+	private String getServiceVersion() {
+		return buildProperties != null ? buildProperties.getVersion() : "development";
+	}
+
+	private String getBuildId() {
+		String id = buildProperties != null ? buildProperties.get("id") : null;
+		return id != null ? id : "unversioned";
+	}
+
+	private String getBuildTime() {
+		return buildProperties != null && buildProperties.getTime() != null
+				? buildProperties.getTime().toString() : "unknown";
+	}
+
+	private String getPdfProducer() {
+		return "Html2PDF " + getServiceVersion() + "; build=" + getBuildId() + "; built=" + getBuildTime();
+	}
+
+	private void setBuildHeaders(HttpServletResponse response) {
+		response.setHeader("X-Html2PDF-Version", getServiceVersion());
+		response.setHeader("X-Html2PDF-Build-Id", getBuildId());
+		response.setHeader("X-Html2PDF-Build-Time", getBuildTime());
 	}
 
 	// Returns application/pdf
@@ -198,15 +231,18 @@ public class MainController {
 			@RequestParam("documentToken") String documentToken,
 			@RequestParam(name = "debug", required = false, defaultValue = "false") boolean debug,
 			HttpServletResponse response) {
+		setBuildHeaders(response);
 		logger.info(String.format(
-				"Start creating PDF for (%s/%s)", wikiId, documentToken));
+				"Start creating PDF for (%s/%s), %s", wikiId, documentToken, getPdfProducer()));
 
+		File renderedFile = null;
 		try {
 			File wikiIdPath = new File(tempPathFile, wikiId);
 			File basePathFile = new File(wikiIdPath, documentToken);
 			File documentFile = new File(basePathFile, documentToken + ".html");
 
 			PdfRendererBuilder builder = new PdfRendererBuilder();
+			builder.withProducer(getPdfProducer());
 
 			builder.useCacheStore(CacheStore.PDF_FONT_METRICS, fontMetricsCache);
 
@@ -236,8 +272,11 @@ public class MainController {
 			builder.withW3cDocument(doc, documentFile.toURI().toASCIIString());
 
 			logger.debug("Start building PDF");
-			builder.toStream(response.getOutputStream());
-			builder.run();
+			renderedFile = File.createTempFile("render-", ".pdf", tempPathFile);
+			try (FileOutputStream output = new FileOutputStream(renderedFile)) {
+				builder.toStream(output);
+				builder.run();
+			}
 			logger.debug("Done building PDF");
 
 			response.setContentType("application/pdf");
@@ -245,12 +284,31 @@ public class MainController {
 			response.setHeader("Cache-Control", "no-cache");
 			response.setHeader("Pragma", "no-cache");
 			response.setHeader("Expires", "0");
+			response.setContentLengthLong(renderedFile.length());
+			Files.copy(renderedFile.toPath(), response.getOutputStream());
 
 			if (!debug) {
 				deleteDirectory(basePathFile);
 			}
 		} catch (Exception e) {
 			logger.error("Error creating PDF", e);
+			if (!response.isCommitted()) {
+				try {
+					response.reset();
+					setBuildHeaders(response);
+					response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "PDF rendering failed.");
+				} catch (IOException responseError) {
+					logger.error("Could not send PDF rendering error response", responseError);
+				}
+			}
+		} finally {
+			if (renderedFile != null) {
+				try {
+					Files.deleteIfExists(renderedFile.toPath());
+				} catch (IOException cleanupError) {
+					logger.warn("Could not remove temporary PDF", cleanupError);
+				}
+			}
 		}
 	}
 
