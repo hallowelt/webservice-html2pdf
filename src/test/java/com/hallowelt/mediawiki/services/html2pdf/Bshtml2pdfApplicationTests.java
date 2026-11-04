@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.jsoup.Jsoup;
 import org.jsoup.parser.Parser;
@@ -64,6 +65,65 @@ class Html2PdfApplicationTests {
 		assertEquals("PDF rendering failed.", response.getErrorMessage());
 		assertEquals(0, response.getContentAsByteArray().length);
 		assertEquals(controller.index().get("buildId"), response.getHeader("X-Html2PDF-Build-Id"));
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "inline,base64", "image,base64", "inline,percent", "image,percent", "inline,local", "image,local" })
+	void rendersNestedSvgDataImage(String embedding, String encoding) throws Exception {
+		String innerSvg = "<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='40' height='40'>"
+				+ "<defs><rect id='box' width='40' height='40' fill='red'/></defs><use xlink:href='#box'/></svg>";
+		String dataUri = "percent".equals(encoding)
+				? "data:image/svg+xml," + java.net.URLEncoder.encode(innerSvg, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20")
+				: "data:image/svg+xml;base64," + java.util.Base64.getEncoder()
+						.encodeToString(innerSvg.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		String outerSvg = "local".equals(encoding) ? innerSvg
+				: "<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='40' height='40'>"
+				+ "<image width='40' height='40' xlink:href='" + dataUri + "'/></svg>";
+		File tempDirectory = (File) ReflectionTestUtils.getField(controller, "tempPathFile");
+		assertNotNull(tempDirectory);
+		String wikiId = "nested-svg-" + UUID.randomUUID();
+		String token = "nested-svg";
+		Path wikiDirectory = tempDirectory.toPath().resolve(wikiId);
+		Path documentDirectory = wikiDirectory.resolve(token);
+		try {
+			Files.createDirectories(documentDirectory);
+			Files.writeString(documentDirectory.resolve("nested.svg"), outerSvg);
+			String content = "inline".equals(embedding) ? outerSvg : "<img src='nested.svg' alt='Red square'/>";
+			Files.writeString(documentDirectory.resolve(token + ".html"),
+					"<!DOCTYPE html><html lang='en'><head><title>Nested SVG</title></head><body>" + content + "</body></html>");
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			controller.renderPDF(wikiId, token, false, response);
+			assertEquals(200, response.getStatus(), response.getErrorMessage());
+			try (PDDocument pdf = Loader.loadPDF(response.getContentAsByteArray())) {
+				java.awt.image.BufferedImage image = new org.apache.pdfbox.rendering.PDFRenderer(pdf).renderImage(0);
+				int redPixels = 0;
+				for (int row = 0; row < image.getHeight(); row++) {
+					for (int column = 0; column < image.getWidth(); column++) {
+						java.awt.Color color = new java.awt.Color(image.getRGB(column, row));
+						if (color.getRed() > 200 && color.getGreen() < 50 && color.getBlue() < 50) {
+							redPixels++;
+						}
+					}
+				}
+				assertTrue(redPixels > 400, embedding + " SVG should render its nested red square, found " + redPixels + " red pixels");
+			}
+		} finally {
+			FileSystemUtils.deleteRecursively(wikiDirectory);
+		}
+	}
+
+	@Test
+	void svgDataSupportKeepsExternalResourcesAndScriptsBlocked() {
+		var userAgent = new com.openhtmltopdf.svgsupport.OpenHtmlUserAgent(
+				new com.openhtmltopdf.svgsupport.PDFTranscoder.OpenHtmlFontResolver(), false, false, java.util.Set.of("data"));
+		var documentUrl = new org.apache.batik.util.ParsedURL("data:image/svg+xml,%3Csvg/%3E");
+		org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> userAgent.checkLoadExternalResource(documentUrl, null));
+		for (String uri : new String[] { "https://example.invalid/image.svg", "http://example.invalid/image.svg", "file:///etc/passwd" }) {
+			org.junit.jupiter.api.Assertions.assertThrows(SecurityException.class,
+					() -> userAgent.checkLoadExternalResource(new org.apache.batik.util.ParsedURL(uri), documentUrl));
+		}
+		org.junit.jupiter.api.Assertions.assertThrows(SecurityException.class,
+				() -> userAgent.checkLoadScript("application/ecmascript", documentUrl, documentUrl));
 	}
 
 	@ParameterizedTest

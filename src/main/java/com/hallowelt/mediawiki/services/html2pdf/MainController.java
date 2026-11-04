@@ -167,6 +167,7 @@ public class MainController {
 	);
 
 	public MainController() {
+		org.apache.batik.util.ParsedURL.registerHandler(new SvgDataProtocolHandler());
 		String tempPath = System.getProperty("html2pdf.temp.dir");
 		if (tempPath == null) {
 			tempPath = System.getenv("HTML2PDF_TEMP_DIR");
