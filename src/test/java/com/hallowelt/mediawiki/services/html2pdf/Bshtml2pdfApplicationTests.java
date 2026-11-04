@@ -68,17 +68,56 @@ class Html2PdfApplicationTests {
 	}
 
 	@ParameterizedTest
-	@CsvSource({ "inline,base64", "image,base64", "inline,percent", "image,percent", "inline,local", "image,local" })
+	@CsvSource({ "inline,base64", "image,base64", "inline,percent", "image,percent", "inline,local", "image,local",
+			"inline,blocked", "image,blocked", "inline,blocked-file", "image,blocked-file",
+			"inline,blocked-http", "image,blocked-http", "inline,blocked-https", "image,blocked-https",
+			"inline,blocked-svg12", "image,blocked-svg12", "inline,nested-blocked", "image,nested-blocked",
+			"inline,gif", "image,gif", "inline,gif87", "image,gif87", "inline,nested-gif", "image,nested-gif" })
 	void rendersNestedSvgDataImage(String embedding, String encoding) throws Exception {
+		String blockedHref = switch (encoding) {
+			case "blocked-file" -> "file:///etc/passwd";
+			case "blocked-http" -> "http://example.invalid/image.svg";
+			case "blocked-https" -> "https://example.invalid/image.svg";
+			default -> "Testfile/proxy_011.htm";
+		};
+		String blockedImage = "<image width='10' height='10' xlink:href='" + blockedHref + "'/>";
 		String innerSvg = "<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='40' height='40'>"
-				+ "<defs><rect id='box' width='40' height='40' fill='red'/></defs><use xlink:href='#box'/></svg>";
+				+ "<defs><rect id='box' width='40' height='40' fill='red'/></defs><use xlink:href='#box'/>"
+				+ ("nested-blocked".equals(encoding) ? blockedImage : "") + "</svg>";
 		String dataUri = "percent".equals(encoding)
 				? "data:image/svg+xml," + java.net.URLEncoder.encode(innerSvg, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20")
 				: "data:image/svg+xml;base64," + java.util.Base64.getEncoder()
 						.encodeToString(innerSvg.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+		if (encoding.endsWith("gif") || "gif87".equals(encoding)) {
+			var gif = new java.awt.image.BufferedImage(40, 40, java.awt.image.BufferedImage.TYPE_INT_RGB);
+			var graphics = gif.createGraphics();
+			try {
+				graphics.setColor(java.awt.Color.RED);
+				graphics.fillRect(0, 0, 40, 40);
+			} finally {
+				graphics.dispose();
+			}
+			var bytes = new java.io.ByteArrayOutputStream();
+			assertTrue(javax.imageio.ImageIO.write(gif, "gif", bytes));
+			byte[] gifBytes = bytes.toByteArray();
+			if ("gif87".equals(encoding)) {
+				gifBytes[4] = '7';
+			}
+			dataUri = "data:image/gif;base64," + java.util.Base64.getEncoder().encodeToString(gifBytes);
+			if ("nested-gif".equals(encoding)) {
+				String nestedSvg = innerSvg.replace("<use xlink:href='#box'/>",
+						"<image width='40' height='40' xlink:href='" + dataUri + "'/>");
+				dataUri = "data:image/svg+xml;base64," + java.util.Base64.getEncoder()
+						.encodeToString(nestedSvg.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+			}
+		}
 		String outerSvg = "local".equals(encoding) ? innerSvg
-				: "<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='40' height='40'>"
+				: "<svg" + ("blocked-svg12".equals(encoding) ? " version='1.2'" : "")
+				+ " xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='40' height='40'>"
 				+ "<image width='40' height='40' xlink:href='" + dataUri + "'/></svg>";
+		if (encoding.startsWith("blocked")) {
+			outerSvg = outerSvg.replace("</svg>", blockedImage + "</svg>");
+		}
 		File tempDirectory = (File) ReflectionTestUtils.getField(controller, "tempPathFile");
 		assertNotNull(tempDirectory);
 		String wikiId = "nested-svg-" + UUID.randomUUID();
@@ -92,8 +131,9 @@ class Html2PdfApplicationTests {
 			Files.writeString(documentDirectory.resolve(token + ".html"),
 					"<!DOCTYPE html><html lang='en'><head><title>Nested SVG</title></head><body>" + content + "</body></html>");
 			MockHttpServletResponse response = new MockHttpServletResponse();
-			controller.renderPDF(wikiId, token, false, response);
+			controller.renderPDF(wikiId, token, true, response);
 			assertEquals(200, response.getStatus(), response.getErrorMessage());
+			assertEquals(outerSvg, Files.readString(documentDirectory.resolve("nested.svg")));
 			try (PDDocument pdf = Loader.loadPDF(response.getContentAsByteArray())) {
 				java.awt.image.BufferedImage image = new org.apache.pdfbox.rendering.PDFRenderer(pdf).renderImage(0);
 				int redPixels = 0;
@@ -113,11 +153,59 @@ class Html2PdfApplicationTests {
 	}
 
 	@Test
+	void gifDecoderPreservesTransparency() throws Exception {
+		var source = new java.awt.image.BufferedImage(2, 1, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+		source.setRGB(1, 0, java.awt.Color.RED.getRGB());
+		var bytes = new java.io.ByteArrayOutputStream();
+		assertTrue(javax.imageio.ImageIO.write(source, "gif", bytes));
+		var decoder = new GifImageRegistryEntry();
+		try (var stream = new java.io.ByteArrayInputStream(bytes.toByteArray())) {
+			assertTrue(decoder.isCompatibleStream(stream));
+			var image = decoder.handleStream(stream, null, false).createDefaultRendering();
+			var raster = image.getData();
+			int transparentPixel = image.getColorModel().getRGB(raster.getDataElements(0, 0, null));
+			int redPixel = image.getColorModel().getRGB(raster.getDataElements(1, 0, null));
+			assertEquals(0, transparentPixel >>> 24);
+			assertEquals(java.awt.Color.RED.getRGB(), redPixel);
+		}
+	}
+
+	@Test
+	void blockedSvgImageFallbackDoesNotHideOtherErrors() {
+		var document = org.apache.batik.anim.dom.SVGDOMImplementation.getDOMImplementation()
+				.createDocument("http://www.w3.org/2000/svg", "svg", null);
+		var image = document.createElementNS("http://www.w3.org/2000/svg", "image");
+		image.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", "data:image/svg+xml,%3Csvg/%3E");
+		document.getDocumentElement().appendChild(image);
+		var expected = new org.apache.batik.bridge.BridgeException(null, image, "Unrelated rendering failure");
+		var imageBridge = new ResilientSvgImageBridge() {
+			@Override
+			protected org.apache.batik.gvt.GraphicsNode createImageGraphicsNode(
+					org.apache.batik.bridge.BridgeContext context, org.w3c.dom.Element element,
+					org.apache.batik.util.ParsedURL url) {
+				throw expected;
+			}
+		};
+		var userAgent = new com.openhtmltopdf.svgsupport.OpenHtmlUserAgent(null, false, false, java.util.Set.of("data"));
+		var context = new org.apache.batik.bridge.BridgeContext(userAgent);
+		try {
+			org.junit.jupiter.api.Assertions.assertSame(expected,
+					org.junit.jupiter.api.Assertions.assertThrows(org.apache.batik.bridge.BridgeException.class,
+							() -> imageBridge.buildImageGraphicsNode(context, image)));
+		} finally {
+			context.dispose();
+		}
+	}
+
+	@Test
 	void svgDataSupportKeepsExternalResourcesAndScriptsBlocked() {
 		var userAgent = new com.openhtmltopdf.svgsupport.OpenHtmlUserAgent(
-				new com.openhtmltopdf.svgsupport.PDFTranscoder.OpenHtmlFontResolver(), false, false, java.util.Set.of("data"));
+				new com.openhtmltopdf.svgsupport.PDFTranscoder.OpenHtmlFontResolver(), false, false, java.util.Collections.singleton("data"));
 		var documentUrl = new org.apache.batik.util.ParsedURL("data:image/svg+xml,%3Csvg/%3E");
 		org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> userAgent.checkLoadExternalResource(documentUrl, null));
+		org.junit.jupiter.api.Assertions.assertThrows(SecurityException.class,
+				() -> userAgent.checkLoadExternalResource(
+						new org.apache.batik.util.ParsedURL(documentUrl, "Testfile/proxy_011.htm"), documentUrl));
 		for (String uri : new String[] { "https://example.invalid/image.svg", "http://example.invalid/image.svg", "file:///etc/passwd" }) {
 			org.junit.jupiter.api.Assertions.assertThrows(SecurityException.class,
 					() -> userAgent.checkLoadExternalResource(new org.apache.batik.util.ParsedURL(uri), documentUrl));

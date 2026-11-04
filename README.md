@@ -102,6 +102,15 @@ as `<use xlink:href="#box"/>` inside those images. Both percent-encoded and base
 data URLs are supported. Scripts and HTTP/file resource requests from SVG remain
 disabled.
 
+When an SVG contains an image reference blocked by that policy, the service logs
+the omission and renders the rest of the drawing with that sub-image left blank.
+The original SVG is not modified. This also applies to images inside embedded
+SVGs; unrelated rendering errors are not suppressed.
+
+Embedded GIF images are decoded from streams using Java ImageIO, since Batik's
+default GIF decoder cannot load data URLs. GIF87a and GIF89a are supported,
+including transparency; animated GIFs contribute their first frame to the PDF.
+
 ## "bshtml2pdf" compatibility
 The old "bshtml2pdf" service ran servlets on a Tomcat server and hat `/BShtml2PDF` as the base URL. This service runs standalone and therefore lacks the `/BShtml2PDF` base URL. The client implementation must be adjusted accordingly.
 

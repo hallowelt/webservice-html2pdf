@@ -168,6 +168,7 @@ public class MainController {
 
 	public MainController() {
 		org.apache.batik.util.ParsedURL.registerHandler(new SvgDataProtocolHandler());
+		org.apache.batik.ext.awt.image.spi.ImageTagRegistry.getRegistry().register(new GifImageRegistryEntry());
 		String tempPath = System.getProperty("html2pdf.temp.dir");
 		if (tempPath == null) {
 			tempPath = System.getenv("HTML2PDF_TEMP_DIR");
@@ -256,7 +257,7 @@ public class MainController {
 			builder.useUnicodeBidiSplitter(new ICUBidiSplitter.ICUBidiSplitterFactory());
 			builder.useUnicodeBidiReorderer(new ICUBidiReorderer());
 			builder.defaultTextDirection(PdfRendererBuilder.TextDirection.LTR);
-			builder.useSVGDrawer(new BatikSVGDrawer(BatikSVGDrawer.SvgScriptMode.SECURE, java.util.Set.of("data")));
+			builder.useSVGDrawer(new BatikSVGDrawer(BatikSVGDrawer.SvgScriptMode.SECURE, java.util.Collections.singleton("data")));
 			builder.useExternalResourceAccessControl(
 				(uri, type) -> {
 					return this.allowFileEmbed(uri, type);
