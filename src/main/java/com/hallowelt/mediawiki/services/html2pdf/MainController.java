@@ -243,43 +243,15 @@ public class MainController {
 			File basePathFile = new File(wikiIdPath, documentToken);
 			File documentFile = new File(basePathFile, documentToken + ".html");
 
-			PdfRendererBuilder builder = new PdfRendererBuilder();
-			builder.withProducer(getPdfProducer());
-
-			builder.useCacheStore(CacheStore.PDF_FONT_METRICS, fontMetricsCache);
-
-			BaseFontMapping.registerFonts(builder);
-			fallbackFontMapping.registerFallbackFonts(builder);
-
-			builder.useFastMode();
-			builder.usePdfUaAccessibility(true);
-			builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_3_U);
-			builder.useUnicodeBidiSplitter(new ICUBidiSplitter.ICUBidiSplitterFactory());
-			builder.useUnicodeBidiReorderer(new ICUBidiReorderer());
-			builder.defaultTextDirection(PdfRendererBuilder.TextDirection.LTR);
-			builder.useSVGDrawer(new BatikSVGDrawer(BatikSVGDrawer.SvgScriptMode.SECURE, java.util.Collections.singleton("data")));
-			builder.useExternalResourceAccessControl(
-				(uri, type) -> {
-					return this.allowFileEmbed(uri, type);
-				},
-				ExternalResourceControlPriority.RUN_AFTER_RESOLVING_URI);
-			builder.useExternalResourceAccessControl(
-				(uri, type) -> {
-					return this.allowFileEmbed(uri, type);
-				},
-				ExternalResourceControlPriority.RUN_BEFORE_RESOLVING_URI);
-
 			logger.info("Document File: " + documentFile.getAbsolutePath());
-			Document doc = html5ParseDocument(documentFile);
-			builder.withW3cDocument(doc, documentFile.toURI().toASCIIString());
-
-			logger.debug("Start building PDF");
-			renderedFile = File.createTempFile("render-", ".pdf", tempPathFile);
-			try (FileOutputStream output = new FileOutputStream(renderedFile)) {
-				builder.toStream(output);
-				builder.run();
+			try {
+				renderedFile = render(documentFile, true);
+			} catch (Exception e) {
+				logger.warn(String.format(
+					"Error creating accessible PDF for (%s/%s), retrying without PDF/UA accessibility",
+					wikiId, documentToken), e);
+				renderedFile = render(documentFile, false);
 			}
-			logger.debug("Done building PDF");
 
 			response.setContentType("application/pdf");
 			response.setHeader("Content-Disposition", "attachment; filename=\"" + documentToken + ".pdf\"");
@@ -312,6 +284,51 @@ public class MainController {
 				}
 			}
 		}
+	}
+
+	private File render(File documentFile, boolean accessible) throws Exception {
+		PdfRendererBuilder builder = new PdfRendererBuilder();
+		builder.withProducer(getPdfProducer());
+
+		builder.useCacheStore(CacheStore.PDF_FONT_METRICS, fontMetricsCache);
+
+		BaseFontMapping.registerFonts(builder);
+		fallbackFontMapping.registerFallbackFonts(builder);
+
+		builder.useFastMode();
+		if (accessible) {
+			builder.usePdfUaAccessibility(true);
+		}
+		builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_3_U);
+		builder.useUnicodeBidiSplitter(new ICUBidiSplitter.ICUBidiSplitterFactory());
+		builder.useUnicodeBidiReorderer(new ICUBidiReorderer());
+		builder.defaultTextDirection(PdfRendererBuilder.TextDirection.LTR);
+		builder.useSVGDrawer(new BatikSVGDrawer(BatikSVGDrawer.SvgScriptMode.SECURE, java.util.Collections.singleton("data")));
+		builder.useExternalResourceAccessControl(
+			(uri, type) -> {
+				return this.allowFileEmbed(uri, type);
+			},
+			ExternalResourceControlPriority.RUN_AFTER_RESOLVING_URI);
+		builder.useExternalResourceAccessControl(
+			(uri, type) -> {
+				return this.allowFileEmbed(uri, type);
+			},
+			ExternalResourceControlPriority.RUN_BEFORE_RESOLVING_URI);
+
+		Document doc = html5ParseDocument(documentFile);
+		builder.withW3cDocument(doc, documentFile.toURI().toASCIIString());
+
+		logger.debug("Start building PDF");
+		File renderedFile = File.createTempFile("render-", ".pdf", tempPathFile);
+		try (FileOutputStream output = new FileOutputStream(renderedFile)) {
+			builder.toStream(output);
+			builder.run();
+		} catch (Exception e) {
+			Files.deleteIfExists(renderedFile.toPath());
+			throw e;
+		}
+		logger.debug("Done building PDF");
+		return renderedFile;
 	}
 
 	private Document html5ParseDocument(File htmlFile) throws IOException {
