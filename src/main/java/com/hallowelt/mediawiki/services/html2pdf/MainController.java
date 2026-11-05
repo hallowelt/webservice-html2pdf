@@ -506,7 +506,11 @@ public class MainController {
 			}
 		}
 
-		doc.select("head").prepend("<style>" + baseFontFaceCSS + "html{font-family:serif-fallback," + fallbackFontMapping.getFontFamilyNames() + "}</style>");
+		// openhtmltopdf's built-in UA stylesheet sets generic families on these elements; override them
+		String noto = fallbackFontMapping.getFontFamilyNames();
+		doc.select("head").prepend("<style>" + baseFontFaceCSS + "html{font-family:serif-fallback," + noto + "}"
+			+ "pre,tt,code,kbd,samp{font-family:monospace-fallback," + noto + "}"
+			+ "button,textarea,input,select{font-family:sans-serif-fallback," + noto + "}</style>");
 	}
 
 	/**
