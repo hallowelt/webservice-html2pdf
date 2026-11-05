@@ -111,5 +111,22 @@ or using the Docker image:
 docker run -p 8080:8080 -e APP_PATH=/BShtml2PDF webservice-htmlpdf
 ```
 
+## Error bundles
+If a render fails, or only succeeds after falling back to untagged (no PDF/UA) rendering, the service stores the complete input (HTML, CSS, images, ...) of that document as `<errorId>.zip`, together with a `manifest.txt` (versions, wikiId, documentToken, stack traces). No `debug` flag is needed. The error ID is returned in the `X-Html2PDF-Error-Id` response header and is logged together with the bundle path.
+
+| Setting (system property / environment variable) | Default |
+|---|---|
+| `html2pdf.bundle.dir` / `HTML2PDF_BUNDLE_DIR` (empty disables bundles) | `<tmpdir>/html2pdf-bundles` (`/data/error-bundles` in the Docker image) |
+| `html2pdf.bundle.retention-days` / `HTML2PDF_BUNDLE_RETENTION_DAYS` | `14` |
+| `html2pdf.bundle.max-count` / `HTML2PDF_BUNDLE_MAX_COUNT` | `100` |
+
+Mount the directory to keep the bundles outside of the container:
+
+```bash
+docker run -p 8080:8080 -v /var/lib/html2pdf/bundles:/data/error-bundles webservice-htmlpdf
+```
+
+Bundles contain the original document content. Treat them as confidential.
+
 ## TODO
 * Implement proper support for custom fonts (e.g. from inline CSS)

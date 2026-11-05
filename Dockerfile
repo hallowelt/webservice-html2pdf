@@ -7,6 +7,8 @@ FROM eclipse-temurin:25-jre-alpine
 COPY --from=build /usr/src/app/target/html2pdf-2.2.*-SNAPSHOT.jar /app/html2pdf.jar
 WORKDIR /app
 
+ENV HTML2PDF_BUNDLE_DIR=/data/error-bundles
+
 EXPOSE 8080
 
 CMD ["java", "-jar", "html2pdf.jar"]

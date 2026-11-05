@@ -63,6 +63,7 @@ class Html2PdfApplicationTests {
 		assertEquals(500, response.getStatus());
 		assertEquals("PDF rendering failed.", response.getErrorMessage());
 		assertEquals(0, response.getContentAsByteArray().length);
+		assertNotNull(response.getHeader("X-Html2PDF-Error-Id"));
 		assertEquals(controller.index().get("buildId"), response.getHeader("X-Html2PDF-Build-Id"));
 	}
 
