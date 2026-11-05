@@ -166,6 +166,15 @@
 									<outputDirectory>${project.build.directory}/generated-sources/openhtmltopdf</outputDirectory>
 									<includes>com/openhtmltopdf/pdfboxout/PdfBoxAccessibilityHelper.java</includes>
 								</artifactItem>
+								<artifactItem>
+									<groupId>io.github.openhtmltopdf</groupId>
+									<artifactId>openhtmltopdf-svg-support</artifactId>
+									<version>${openhtml.version}</version>
+									<classifier>sources</classifier>
+									<type>jar</type>
+									<outputDirectory>${project.build.directory}/generated-sources/openhtmltopdf</outputDirectory>
+									<includes>com/openhtmltopdf/svgsupport/SVGImageExtension.java</includes>
+								</artifactItem>
 							</artifactItems>
 							<overWriteReleases>true</overWriteReleases>
 						</configuration>
@@ -194,6 +203,21 @@
 									file="${project.build.directory}/generated-sources/openhtmltopdf/com/openhtmltopdf/pdfboxout/PdfBoxAccessibilityHelper.java"
 									token="logIncompatibleChild(parent, child, FigureContentItem.class);"
 									value="logIncompatibleChild(this, child, FigureContentItem.class);"
+									failOnNoReplacements="true" />
+								<replace
+									file="${project.build.directory}/generated-sources/openhtmltopdf/com/openhtmltopdf/svgsupport/SVGImageExtension.java"
+									token="private static class ImageBridge extends SVGImageElementBridge {"
+									value="private static class ImageBridge extends com.hallowelt.mediawiki.services.html2pdf.ResilientSvgImageBridge {"
+									failOnNoReplacements="true" />
+								<replace
+									file="${project.build.directory}/generated-sources/openhtmltopdf/com/openhtmltopdf/svgsupport/SVGImageExtension.java"
+									token="public BridgeCtx(UserAgent userAgent, UserAgentCallback userAgentCallback) {"
+									value="@Override public BridgeContext createBridgeContext(org.apache.batik.anim.dom.SVGOMDocument document) { return SVGImageExtension.newBridge(document.isSVG12() ? &quot;1.2&quot; : &quot;1.1&quot;, getUserAgent(), uac); }&#10;        public BridgeCtx(UserAgent userAgent, UserAgentCallback userAgentCallback) {"
+									failOnNoReplacements="true" />
+								<replace
+									file="${project.build.directory}/generated-sources/openhtmltopdf/com/openhtmltopdf/svgsupport/SVGImageExtension.java"
+									token="public Bridge12Ctx(UserAgent userAgent, UserAgentCallback userAgentCallback) {"
+									value="@Override public BridgeContext createBridgeContext(org.apache.batik.anim.dom.SVGOMDocument document) { return SVGImageExtension.newBridge(document.isSVG12() ? &quot;1.2&quot; : &quot;1.1&quot;, getUserAgent(), uac); }&#10;        public Bridge12Ctx(UserAgent userAgent, UserAgentCallback userAgentCallback) {"
 									failOnNoReplacements="true" />
 							</target>
 						</configuration>

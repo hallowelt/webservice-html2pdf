@@ -167,6 +167,8 @@ public class MainController {
 	);
 
 	public MainController() {
+		org.apache.batik.util.ParsedURL.registerHandler(new SvgDataProtocolHandler());
+		org.apache.batik.ext.awt.image.spi.ImageTagRegistry.getRegistry().register(new GifImageRegistryEntry());
 		String tempPath = System.getProperty("html2pdf.temp.dir");
 		if (tempPath == null) {
 			tempPath = System.getenv("HTML2PDF_TEMP_DIR");
@@ -301,7 +303,7 @@ public class MainController {
 		builder.useUnicodeBidiSplitter(new ICUBidiSplitter.ICUBidiSplitterFactory());
 		builder.useUnicodeBidiReorderer(new ICUBidiReorderer());
 		builder.defaultTextDirection(PdfRendererBuilder.TextDirection.LTR);
-		builder.useSVGDrawer(new BatikSVGDrawer(BatikSVGDrawer.SvgScriptMode.SECURE, java.util.Set.of("data")));
+		builder.useSVGDrawer(new BatikSVGDrawer(BatikSVGDrawer.SvgScriptMode.SECURE, java.util.Collections.singleton("data")));
 		builder.useExternalResourceAccessControl(
 			(uri, type) -> {
 				return this.allowFileEmbed(uri, type);
@@ -523,7 +525,11 @@ public class MainController {
 			}
 		}
 
-		doc.select("head").prepend("<style>" + baseFontFaceCSS + "html{font-family:serif-fallback," + fallbackFontMapping.getFontFamilyNames() + "}</style>");
+		// openhtmltopdf's built-in UA stylesheet sets generic families on these elements; override them
+		String noto = fallbackFontMapping.getFontFamilyNames();
+		doc.select("head").prepend("<style>" + baseFontFaceCSS + "html{font-family:serif-fallback," + noto + "}"
+			+ "pre,tt,code,kbd,samp{font-family:monospace-fallback," + noto + "}"
+			+ "button,textarea,input,select{font-family:sans-serif-fallback," + noto + "}</style>");
 	}
 
 	/**
