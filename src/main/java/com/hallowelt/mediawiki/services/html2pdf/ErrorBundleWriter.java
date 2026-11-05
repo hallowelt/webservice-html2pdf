@@ -49,17 +49,14 @@ public class ErrorBundleWriter {
 
 	/**
 	 * Settings (system property / environment variable):
-	 * html2pdf.bundle.dir / HTML2PDF_BUNDLE_DIR (default: tmp/html2pdf-bundles, empty = disabled),
+	 * html2pdf.bundle.dir / HTML2PDF_BUNDLE_DIR (default: not set = bundles disabled),
 	 * html2pdf.bundle.retention-days / HTML2PDF_BUNDLE_RETENTION_DAYS (default: 14),
 	 * html2pdf.bundle.max-count / HTML2PDF_BUNDLE_MAX_COUNT (default: 100)
 	 */
 	public static ErrorBundleWriter fromEnvironment() {
 		String dir = setting("html2pdf.bundle.dir", "HTML2PDF_BUNDLE_DIR");
-		if (dir == null) {
-			dir = System.getProperty("java.io.tmpdir") + "/html2pdf-bundles";
-		}
 		return new ErrorBundleWriter(
-			dir.isBlank() ? null : new File(dir),
+			dir == null || dir.isBlank() ? null : new File(dir),
 			intSetting("html2pdf.bundle.retention-days", "HTML2PDF_BUNDLE_RETENTION_DAYS", 14),
 			intSetting("html2pdf.bundle.max-count", "HTML2PDF_BUNDLE_MAX_COUNT", 100));
 	}
