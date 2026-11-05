@@ -120,11 +120,39 @@ If a render fails, or only succeeds after falling back to untagged (no PDF/UA) r
 | `html2pdf.bundle.retention-days` / `HTML2PDF_BUNDLE_RETENTION_DAYS` | `14` |
 | `html2pdf.bundle.max-count` / `HTML2PDF_BUNDLE_MAX_COUNT` | `100` |
 
-Mount the directory to keep the bundles outside of the container:
+### Configuration by deployment type
+The settings are read from system properties (`-D...`) or environment variables. The environment variable names are the ones in the table above.
 
+**Running the `.jar` directly**
+```bash
+java -Dhtml2pdf.bundle.dir=/var/lib/html2pdf/bundles -jar html2pdf.jar
+# or
+HTML2PDF_BUNDLE_DIR=/var/lib/html2pdf/bundles java -jar html2pdf.jar
+```
+Without a setting, bundles go to `<java.io.tmpdir>/html2pdf-bundles` (usually `/tmp/html2pdf-bundles`).
+
+**Using the Docker image of this repository**
+`HTML2PDF_BUNDLE_DIR` is already set to `/data/error-bundles`. Mount a volume there, otherwise the bundles are lost when the container is removed:
 ```bash
 docker run -p 8080:8080 -v /var/lib/html2pdf/bundles:/data/error-bundles webservice-htmlpdf
 ```
+
+**Using the `.jar` inside another Docker image / service**
+The `ENV` in this repository's Dockerfile does not apply, so you have to set the variable and a volume yourself. Otherwise the default (`/tmp/html2pdf-bundles` inside the container) is used and the bundles are lost with the container. Example `docker-compose.yml`:
+```yaml
+services:
+  html2pdf:
+    environment:
+      HTML2PDF_BUNDLE_DIR: /data/error-bundles
+      HTML2PDF_BUNDLE_RETENTION_DAYS: "14"
+      HTML2PDF_BUNDLE_MAX_COUNT: "100"
+    volumes:
+      - ./html2pdf-bundles:/data/error-bundles
+```
+The directory must be writable by the user the service runs as. If a bundle cannot be written, the service logs the reason, still returns the error ID, and answers as usual.
+
+### Retrieving a bundle
+The error ID from the `X-Html2PDF-Error-Id` response header (or the log line `Error ID <id> ... bundle=<path>`) is the file name: `<bundle dir>/<errorId>.zip`. Copy it from the mounted directory, or from a running container with `docker cp <container>:/data/error-bundles/<errorId>.zip .`.
 
 Bundles contain the original document content. Treat them as confidential.
 
