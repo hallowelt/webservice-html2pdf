@@ -190,6 +190,11 @@
 									token="logIncompatibleChild(parent, child, TableBodyStructualElement.class);"
 									value="if (child instanceof GenericStructualElement &amp;&amp; ((GenericStructualElement) child).box != null &amp;&amp; ((GenericStructualElement) child).box.getStyle().isIdent(CSSName.DISPLAY, IdentValue.TABLE_HEADER_GROUP)) { GenericStructualElement header = (GenericStructualElement) child; this.thead.box = header.box; this.thead.page = header.page; for (AbstractTreeItem headerChild : header.children) { headerChild.parent = this.thead; this.thead.children.add(headerChild); } } else { logIncompatibleChild(this, child, TableBodyStructualElement.class); }"
 									failOnNoReplacements="true" />
+								<replace
+									file="${project.build.directory}/generated-sources/openhtmltopdf/com/openhtmltopdf/pdfboxout/PdfBoxAccessibilityHelper.java"
+									token="logIncompatibleChild(parent, child, FigureContentItem.class);"
+									value="logIncompatibleChild(this, child, FigureContentItem.class);"
+									failOnNoReplacements="true" />
 							</target>
 						</configuration>
 					</execution>
