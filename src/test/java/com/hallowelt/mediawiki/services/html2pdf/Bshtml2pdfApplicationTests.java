@@ -64,7 +64,25 @@ class Html2PdfApplicationTests {
 		assertEquals(500, response.getStatus());
 		assertEquals("PDF rendering failed.", response.getErrorMessage());
 		assertEquals(0, response.getContentAsByteArray().length);
+		assertNotNull(response.getHeader("X-Html2PDF-Error-Id"));
 		assertEquals(controller.index().get("buildId"), response.getHeader("X-Html2PDF-Build-Id"));
+	}
+
+	@Test
+	void emptyDocumentReturnsServerErrorWithErrorId() throws Exception {
+		File tempDirectory = (File) ReflectionTestUtils.getField(controller, "tempPathFile");
+		String wikiId = "test-" + UUID.randomUUID();
+		File documentDir = new File(new File(tempDirectory, wikiId), "empty");
+		Files.createDirectories(documentDir.toPath());
+		Files.writeString(new File(documentDir, "empty.html").toPath(), "");
+		try {
+			MockHttpServletResponse response = new MockHttpServletResponse();
+			controller.renderPDF(wikiId, "empty", false, response);
+			assertEquals(500, response.getStatus());
+			assertNotNull(response.getHeader("X-Html2PDF-Error-Id"));
+		} finally {
+			FileSystemUtils.deleteRecursively(new File(tempDirectory, wikiId));
+		}
 	}
 
 	@ParameterizedTest

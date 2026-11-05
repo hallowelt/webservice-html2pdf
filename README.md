@@ -128,5 +128,52 @@ or using the Docker image:
 docker run -p 8080:8080 -e APP_PATH=/BShtml2PDF webservice-htmlpdf
 ```
 
+## Error bundles
+**Disabled by default**, because bundles contain customer content. Set `HTML2PDF_BUNDLE_DIR` to enable them.
+
+If enabled and a render fails, or only succeeds after falling back to untagged (no PDF/UA) rendering, the service stores the complete input (HTML, CSS, images, ...) of that document as `<errorId>.zip`, together with a `manifest.txt` (versions, wikiId, documentToken, stack traces). No `debug` flag is needed. The error ID is returned in the `X-Html2PDF-Error-Id` response header and is logged together with the bundle path.
+
+| Setting (system property / environment variable) | Default |
+|---|---|
+| `html2pdf.bundle.dir` / `HTML2PDF_BUNDLE_DIR` (unset or empty: disabled) | not set (disabled) |
+| `html2pdf.bundle.retention-days` / `HTML2PDF_BUNDLE_RETENTION_DAYS` | `14` |
+| `html2pdf.bundle.max-count` / `HTML2PDF_BUNDLE_MAX_COUNT` | `100` |
+
+### Configuration by deployment type
+The settings are read from system properties (`-D...`) or environment variables. The environment variable names are the ones in the table above.
+
+**Running the `.jar` directly**
+```bash
+java -Dhtml2pdf.bundle.dir=/var/lib/html2pdf/bundles -jar html2pdf.jar
+# or
+HTML2PDF_BUNDLE_DIR=/var/lib/html2pdf/bundles java -jar html2pdf.jar
+```
+Without the setting, no bundles are written. The error ID is still returned and logged.
+
+**Using the Docker image of this repository**
+Set `HTML2PDF_BUNDLE_DIR` and mount a volume there, otherwise the bundles are lost when the container is removed:
+```bash
+docker run -p 8080:8080 -e HTML2PDF_BUNDLE_DIR=/data/error-bundles -v /var/lib/html2pdf/bundles:/data/error-bundles webservice-htmlpdf
+```
+
+**Using the `.jar` inside another Docker image / service**
+Set the variable and a volume yourself, otherwise no bundles are written (or they are lost with the container if you point the directory into it). Example `docker-compose.yml`:
+```yaml
+services:
+  html2pdf:
+    environment:
+      HTML2PDF_BUNDLE_DIR: /data/error-bundles
+      HTML2PDF_BUNDLE_RETENTION_DAYS: "14"
+      HTML2PDF_BUNDLE_MAX_COUNT: "100"
+    volumes:
+      - ./html2pdf-bundles:/data/error-bundles
+```
+The directory must be writable by the user the service runs as. If a bundle cannot be written, the service logs the reason, still returns the error ID, and answers as usual.
+
+### Retrieving a bundle
+The error ID from the `X-Html2PDF-Error-Id` response header (or the log line `Error ID <id> ... bundle=<path>`) is the file name: `<bundle dir>/<errorId>.zip`. Copy it from the mounted directory, or from a running container with `docker cp <container>:/data/error-bundles/<errorId>.zip .`.
+
+Bundles contain the original document content. Treat them as confidential.
+
 ## TODO
 * Implement proper support for custom fonts (e.g. from inline CSS)
