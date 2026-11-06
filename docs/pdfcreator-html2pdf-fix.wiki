@@ -1,0 +1,36 @@
+= PDFCreator HTML-to-PDF accessibility fix =
+
+[[File:pdfcreator-html2pdf-flow.svg|frameless|alt=PDFCreator to html2pdf export flow and Maven source patch]]
+
+== Changes ==
+
+The html2pdf service uses OpenHTMLtoPDF for PDF generation. The selected OpenHTMLtoPDF release still needs a local source patch for accessibility structure generation when PDFCreator promotes a table header row into a populated <code>&lt;thead&gt;</code>.
+
+The service's <code>pom.xml</code> performs these build steps during <code>generate-sources</code>:
+
+# Set the shared OpenHTMLtoPDF version to <code>1.1.108</code>.
+# Extract only <code>PdfBoxAccessibilityHelper.java</code> from the matching OpenHTMLtoPDF sources JAR into <code>target/generated-sources/openhtmltopdf</code>.
+# Patch <code>TableStructualElement.addChild()</code> so a reconstructed table-header group and its children are attached to the table's existing <code>THead</code> structure with their parent links updated. Unexpected children continue through the warning path using the current table object.
+# Add the generated directory to compilation. The resulting application class takes precedence over the same class in the dependency JAR.
+
+The source is re-extracted before patching on each build. Maven fails if the expected patch location is not present, so an upstream source change cannot silently skip the patch.
+
+PDF/UA and PDF/A-3U remain enabled. The repeated table header remains in the accessibility structure as <code>Table &gt; THead &gt; TR &gt; TH</code>.
+
+== Regression test ==
+
+The captured-document test renders the original populated-header document and control variants with the header row in <code>&lt;tbody&gt;</code>. The original PDF is checked for a structure tree containing <code>THead</code> and <code>TH</code>.
+
+Run the test from the service directory with:
+
+<syntaxhighlight lang="bash">
+./mvnw -Djava.version=21 \
+  -Dhtml2pdf.document-diagnostic=/path/to/captured.html \
+  -Dtest=Html2PdfApplicationTests#rendersCapturedDocumentWithAccessibility test
+</syntaxhighlight>
+
+== Diagnostic cache files ==
+
+PDFCreator-side HTML captures are stored under <code>cache/debug-html2pdf/PDFCreator/</code>. Service-side captures, when enabled, are stored under <code>cache/debug-html2pdf/html2pdf/&lt;token&gt;/</code>. Maven-generated patched source and class files are under <code>cache/webservice-html2pdf/target/</code>; they are build artifacts and are not checked in.
+
+A PDFCreator <code>&lt;pdfpagebreak&gt;</code> marker is separate from the accessibility patch. In the reported export, removing the explicit page-break marker immediately before the table removed the blank page; no page-break behavior was changed in the service.
