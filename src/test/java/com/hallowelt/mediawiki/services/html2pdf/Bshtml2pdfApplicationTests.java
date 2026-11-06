@@ -2,6 +2,7 @@ package com.hallowelt.mediawiki.services.html2pdf;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -40,6 +41,15 @@ class Html2PdfApplicationTests {
 	@Test
 	void contextLoads() {
 		assertNotNull(applicationContext, "The application context should have loaded.");
+	}
+
+	@Test
+	void fallbackFontMetricsAreNormalized() {
+		var mapping = new FallbackFontMapping();
+		String fallbackFamily = mapping.getFontFamilyNames().split(",")[0].replace("'", "").trim();
+		assertNotNull(mapping.getMetricsOverride("font-metrics2:" + fallbackFamily + ":400:NORMAL"));
+		assertNull(mapping.getMetricsOverride("font-metrics2:CustomFont:400:NORMAL"));
+		assertNull(mapping.getMetricsOverride("font-metrics:CustomFont:400:NORMAL"));
 	}
 
 	@Test

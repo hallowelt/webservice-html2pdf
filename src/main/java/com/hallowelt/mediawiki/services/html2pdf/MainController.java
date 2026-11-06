@@ -68,9 +68,8 @@ public class MainController {
 
 	/**
 	 * Persistent font metrics cache shared across all PDF render requests.
-	 * Populated by the static classpath fonts (Base 14 and Noto fallback fonts).
-	 * User-uploaded fonts referenced via CSS {@code @font-face} do not interact
-	 * with this cache and are therefore never stored here.
+	 * Used by the static classpath fonts, fallback fonts, and CSS {@code @font-face}
+	 * fonts. Metrics overrides are applied on lookup before cached metrics are used.
 	 */
 	private final FSCacheEx<String, FSCacheValue> fontMetricsCache = new FSCacheEx<String, FSCacheValue>() {
 		private final ConcurrentHashMap<String, FSCacheValue> store = new ConcurrentHashMap<>();
