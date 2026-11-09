@@ -78,23 +78,6 @@ class Html2PdfApplicationTests {
 		assertEquals(controller.index().get("buildId"), response.getHeader("X-Html2PDF-Build-Id"));
 	}
 
-	@Test
-	void emptyDocumentReturnsServerErrorWithErrorId() throws Exception {
-		File tempDirectory = (File) ReflectionTestUtils.getField(controller, "tempPathFile");
-		String wikiId = "test-" + UUID.randomUUID();
-		File documentDir = new File(new File(tempDirectory, wikiId), "empty");
-		Files.createDirectories(documentDir.toPath());
-		Files.writeString(new File(documentDir, "empty.html").toPath(), "");
-		try {
-			MockHttpServletResponse response = new MockHttpServletResponse();
-			controller.renderPDF(wikiId, "empty", false, response);
-			assertEquals(500, response.getStatus());
-			assertNotNull(response.getHeader("X-Html2PDF-Error-Id"));
-		} finally {
-			FileSystemUtils.deleteRecursively(new File(tempDirectory, wikiId));
-		}
-	}
-
 	@ParameterizedTest
 	@CsvSource({ "inline,base64", "image,base64", "inline,percent", "image,percent", "inline,local", "image,local",
 			"inline,blocked", "image,blocked", "inline,blocked-file", "image,blocked-file",

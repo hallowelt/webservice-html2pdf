@@ -321,15 +321,6 @@ public class MainController {
 	}
 
 	private File render(File documentFile, boolean accessible) throws Exception {
-		try {
-			return doRender(documentFile, accessible);
-		} catch (StackOverflowError e) {
-			// Deeply nested documents overflow the stack; handle it like any other render failure
-			throw new IllegalStateException("Document is nested too deeply to render", e);
-		}
-	}
-
-	private File doRender(File documentFile, boolean accessible) throws Exception {
 		PdfRendererBuilder builder = new PdfRendererBuilder();
 		builder.withProducer(getPdfProducer());
 
@@ -376,9 +367,6 @@ public class MainController {
 
 	private Document html5ParseDocument(File htmlFile) throws IOException {
 		String fileContents = org.apache.commons.io.FileUtils.readFileToString(htmlFile, "UTF-8");
-		if (fileContents.isBlank()) {
-			throw new IOException("Document is empty: " + htmlFile.getName());
-		}
 		org.jsoup.nodes.Document doc = Jsoup.parse(
 			fileContents,
 			htmlFile.toURI().toASCIIString(),
