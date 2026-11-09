@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -53,8 +52,6 @@ public class MainController {
 	private File tempPathFile = null;
 
 	private FallbackFontMapping fallbackFontMapping = new FallbackFontMapping();
-
-	private ErrorBundleWriter errorBundleWriter = ErrorBundleWriter.fromEnvironment();
 
 	/**
 	 * CSS snippet containing {@code @font-face} rules for all Base-14 fonts,
@@ -240,24 +237,19 @@ public class MainController {
 				"Start creating PDF for (%s/%s), %s", wikiId, documentToken, getPdfProducer()));
 
 		File renderedFile = null;
-		File basePathFile = null;
-		Exception accessibleError = null;
 		try {
 			File wikiIdPath = new File(tempPathFile, wikiId);
-			basePathFile = new File(wikiIdPath, documentToken);
+			File basePathFile = new File(wikiIdPath, documentToken);
 			File documentFile = new File(basePathFile, documentToken + ".html");
 
 			logger.info("Document File: " + documentFile.getAbsolutePath());
 			try {
 				renderedFile = render(documentFile, true);
 			} catch (Exception e) {
-				accessibleError = e;
 				logger.warn(String.format(
 					"Error creating accessible PDF for (%s/%s), retrying without PDF/UA accessibility",
 					wikiId, documentToken), e);
 				renderedFile = render(documentFile, false);
-				response.setHeader("X-Html2PDF-Error-Id", storeErrorBundle(
-					wikiId, documentToken, basePathFile, "retry-without-accessibility", accessibleError, null));
 			}
 
 			response.setContentType("application/pdf");
@@ -273,12 +265,10 @@ public class MainController {
 			}
 		} catch (Exception e) {
 			logger.error("Error creating PDF", e);
-			String errorId = storeErrorBundle(wikiId, documentToken, basePathFile, "failed", accessibleError, e);
 			if (!response.isCommitted()) {
 				try {
 					response.reset();
 					setBuildHeaders(response);
-					response.setHeader("X-Html2PDF-Error-Id", errorId);
 					response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "PDF rendering failed.");
 				} catch (IOException responseError) {
 					logger.error("Could not send PDF rendering error response", responseError);
@@ -293,31 +283,6 @@ public class MainController {
 				}
 			}
 		}
-	}
-
-	private String storeErrorBundle(
-			String wikiId, String documentToken, File inputDir,
-			String outcome, Exception accessibleError, Exception finalError) {
-		String errorId = ErrorBundleWriter.newErrorId();
-
-		Map<String, String> info = new LinkedHashMap<>();
-		info.put("outcome", outcome);
-		info.put("wikiId", wikiId);
-		info.put("documentToken", documentToken);
-		info.put("producer", getPdfProducer());
-		List<Throwable> errors = new ArrayList<>();
-		if (accessibleError != null) {
-			errors.add(accessibleError);
-		}
-		if (finalError != null) {
-			errors.add(finalError);
-		}
-
-		File bundle = errorBundleWriter.write(errorId, inputDir, info, errors);
-		logger.warn(String.format(
-			"Error ID %s for (%s/%s), outcome=%s, bundle=%s",
-			errorId, wikiId, documentToken, outcome, bundle != null ? bundle.getAbsolutePath() : "not written"));
-		return errorId;
 	}
 
 	private File render(File documentFile, boolean accessible) throws Exception {
