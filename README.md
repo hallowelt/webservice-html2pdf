@@ -60,7 +60,7 @@ curl http://localhost:8080/Html2PDF/v1/
 ```
 will return somthing like:
 ```
-{"msg":"Service is running","success":true,"version":"2.2.3"}
+{"msg":"Service is running","success":true,"version":"2.2.5"}
 ```
 
 ## Fonts and Multi-Script Support
@@ -130,3 +130,19 @@ docker run -p 8080:8080 -e APP_PATH=/BShtml2PDF webservice-htmlpdf
 
 ## TODO
 * Implement proper support for custom fonts (e.g. from inline CSS)
+
+## Creating Releases
+
+To create a new release, please update the version number in this file and in
+`pom.xml`. As soon as this change is merged, build the `.jar` file
+from within the `main` branch:
+
+```
+docker build -t webservice-pdf-release-builder .
+docker run --rm --detach --name webservice-pdf-release webservice-pdf-release-builder
+docker cp webservice-pdf-release:/app/html2pdf.jar /tmp/
+docker stop webservice-pdf-release
+sha256sum /tmp/html2pdf.jar
+```
+
+Then append `/tmp/html2pdf.jar` and its hash sum to the new release on Github.
