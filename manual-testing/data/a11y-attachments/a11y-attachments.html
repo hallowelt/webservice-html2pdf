@@ -1,0 +1,54 @@
+<html lang="en">
+	<head>
+		<title>Accessibility: attachments</title>
+		<meta name="DC.title" content="Accessibility: attachments"/>
+		<style type="text/css"><![CDATA[
+			body { font-family: sans-serif; }
+			table { border-collapse: collapse; }
+			th, td { border: 1px solid #333; padding: 4px; }
+			th { background-color: #ddeeff; }
+			.note { color: #555; background-color: rgba(255, 200, 0, 0.3); }
+		]]></style>
+	</head>
+	<body>
+		<h1>Accessibility: attachments</h1>
+		<p>
+			Fixture for PDF/UA-1 and PDF/A-3u validation. It covers embedded file attachments
+			(openhtmltopdf issue #66), regular links, an image with alternative text, a data table
+			and semi-transparent colors.
+		</p>
+
+		<h2>Attachments</h2>
+		<p>
+			Attachment via the MediaWiki markup:
+			<a data-fs-embed-file="true" style="display:inline-block" href="attachments/Some_attachment.docx"
+				class="internal media" title="Some attachment.docx">Some attachment link</a>
+		</p>
+		<p>
+			Attachment via a plain download link:
+			<a href="attachments/Notes.txt" download="Notes.txt" data-content-type="text/plain"
+				title="Notes.txt">Notes</a>
+		</p>
+
+		<h2>Links</h2>
+		<p>
+			External: <a href="https://www.mediawiki.org/wiki/Extension:PDFCreator" title="Extension:PDFCreator">PDFCreator</a>,
+			internal: <a href="#table" title="Jump to the table">jump to the table</a>.
+		</p>
+
+		<h2>Image</h2>
+		<p><img src="images/bs-logo.png" alt="BlueSpice logo" width="120"/></p>
+
+		<h2 id="table">Table</h2>
+		<table>
+			<thead>
+				<tr><th>Format</th><th>Validator rule</th></tr>
+			</thead>
+			<tbody>
+				<tr><td>PDF/UA-1</td><td>7.18.1-1: annotations nested in Annot</td></tr>
+				<tr><td>PDF/A-3u</td><td>6.2.4.3-2: DeviceRGB requires an OutputIntent</td></tr>
+			</tbody>
+		</table>
+		<p class="note">Semi-transparent background (transparency group check).</p>
+	</body>
+</html>

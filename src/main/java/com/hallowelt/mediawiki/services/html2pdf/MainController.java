@@ -105,6 +105,10 @@ public class MainController {
 
 	private static final Logger logger = LoggerFactory.getLogger(MainController.class);
 
+	/** sRGB ICC profile shipped with the JDK, embedded as the PDF/A OutputIntent. */
+	private static final byte[] SRGB_ICC_PROFILE =
+		java.awt.color.ICC_Profile.getInstance(java.awt.color.ColorSpace.CS_sRGB).getData();
+
 	/**
 	 * Matches either a complete CSS {@code @font-face} block (group 1) or a
 	 * {@code font-family}/{@code font} shorthand declaration outside such a block,
@@ -299,6 +303,8 @@ public class MainController {
 			builder.usePdfUaAccessibility(true);
 		}
 		builder.usePdfAConformance(PdfRendererBuilder.PdfAConformance.PDFA_3_U);
+		// PDF/A requires an OutputIntent; without it every DeviceRGB colour fails validation
+		builder.useColorProfile(SRGB_ICC_PROFILE);
 		builder.useUnicodeBidiSplitter(new ICUBidiSplitter.ICUBidiSplitterFactory());
 		builder.useUnicodeBidiReorderer(new ICUBidiReorderer());
 		builder.defaultTextDirection(PdfRendererBuilder.TextDirection.LTR);
@@ -327,7 +333,30 @@ public class MainController {
 			throw e;
 		}
 		logger.debug("Done building PDF");
+
+		if (accessible && hasFileAttachments(doc)) {
+			try {
+				PdfAccessibilityPostProcessor.process(renderedFile);
+			} catch (Exception e) {
+				Files.deleteIfExists(renderedFile.toPath());
+				throw e;
+			}
+		}
 		return renderedFile;
+	}
+
+	/**
+	 * openhtmltopdf renders {@code <a download>} as FileAttachment annotations, which need
+	 * PDF/UA post-processing. Other documents skip it, so large PDFs are not rewritten needlessly.
+	 */
+	private static boolean hasFileAttachments(Document doc) {
+		org.w3c.dom.NodeList links = doc.getElementsByTagName("a");
+		for (int i = 0; i < links.getLength(); i++) {
+			if (((org.w3c.dom.Element) links.item(i)).hasAttribute("download")) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private Document html5ParseDocument(File htmlFile) throws IOException {
@@ -352,46 +381,7 @@ public class MainController {
 				continue;
 			}
 
-			String mimeType = "application/octet-stream";
-			if (href.endsWith(".pdf")) {
-				mimeType = "application/pdf";
-			} else if (href.endsWith(".html")) {
-				mimeType = "text/html";
-			} else if (href.endsWith(".png")) {
-				mimeType = "image/png";
-			} else if (href.endsWith(".jpg") || href.endsWith(".jpeg")) {
-				mimeType = "image/jpeg";
-			} else if (href.endsWith(".gif")) {
-				mimeType = "image/gif";
-			} else if (href.endsWith(".svg")) {
-				mimeType = "image/svg+xml";
-			} else if (href.endsWith(".css")) {
-				mimeType = "text/css";
-			} else if (href.endsWith(".js")) {
-				mimeType = "application/javascript";
-			} else if (href.endsWith(".json")) {
-				mimeType = "application/json";
-			} else if (href.endsWith(".xml")) {
-				mimeType = "application/xml";
-			} else if (href.endsWith(".txt")) {
-				mimeType = "text/plain";
-			} else if (href.endsWith(".zip")) {
-				mimeType = "application/zip";
-			}
-			// MICROSOFT OFFICE FILES
-			else if (href.endsWith(".doc")) {
-				mimeType = "application/msword";
-			} else if (href.endsWith(".docx")) {
-				mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-			} else if (href.endsWith(".xls")) {
-				mimeType = "application/vnd.ms-excel";
-			} else if (href.endsWith(".xlsx")) {
-				mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-			} else if (href.endsWith(".ppt")) {
-				mimeType = "application/vnd.ms-powerpoint";
-			} else if (href.endsWith(".pptx")) {
-				mimeType = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-			}
+			String mimeType = guessMimeType(href);
 
 			String fileName = href.substring(href.lastIndexOf('/') + 1);
 			embed.attr("download", fileName);
@@ -402,7 +392,62 @@ public class MainController {
 			logger.debug("Modified Element: " + embed.toString());
 		}
 
+		// Plain `<a download>` links need the same metadata for PDF/A-3: an AFRelationship
+		// (veraPDF 6.8-3/6.8-4) and a MIME type for the embedded file stream.
+		for (org.jsoup.nodes.Element link : doc.select("a[download]")) {
+			if (!link.hasAttr("relationship")) {
+				link.attr("relationship", "Unspecified");
+			}
+			if (!link.hasAttr("data-content-type")) {
+				link.attr("data-content-type", guessMimeType(link.attr("href")));
+			}
+		}
+
 		return new W3CDom().fromJsoup(doc);
+	}
+
+	private static String guessMimeType(String href) {
+		href = href.toLowerCase();
+		if (href.endsWith(".pdf")) {
+			return "application/pdf";
+		} else if (href.endsWith(".html")) {
+			return "text/html";
+		} else if (href.endsWith(".png")) {
+			return "image/png";
+		} else if (href.endsWith(".jpg") || href.endsWith(".jpeg")) {
+			return "image/jpeg";
+		} else if (href.endsWith(".gif")) {
+			return "image/gif";
+		} else if (href.endsWith(".svg")) {
+			return "image/svg+xml";
+		} else if (href.endsWith(".css")) {
+			return "text/css";
+		} else if (href.endsWith(".js")) {
+			return "application/javascript";
+		} else if (href.endsWith(".json")) {
+			return "application/json";
+		} else if (href.endsWith(".xml")) {
+			return "application/xml";
+		} else if (href.endsWith(".txt")) {
+			return "text/plain";
+		} else if (href.endsWith(".zip")) {
+			return "application/zip";
+		}
+		// MICROSOFT OFFICE FILES
+		else if (href.endsWith(".doc")) {
+			return "application/msword";
+		} else if (href.endsWith(".docx")) {
+			return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+		} else if (href.endsWith(".xls")) {
+			return "application/vnd.ms-excel";
+		} else if (href.endsWith(".xlsx")) {
+			return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+		} else if (href.endsWith(".ppt")) {
+			return "application/vnd.ms-powerpoint";
+		} else if (href.endsWith(".pptx")) {
+			return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+		}
+		return "application/octet-stream";
 	}
 
 	private boolean allowFileEmbed(String uri, ExternalResourceType type) {
