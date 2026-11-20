@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      # Also renders the sample documents in manual-testing/data into target/validation-pdfs
+      - name: Build and run tests
+        run: ./mvnw -B verify -Dhtml2pdf.pdf-output-dir="$GITHUB_WORKSPACE/target/validation-pdfs"
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+
+      - name: Upload rendered PDFs
+        uses: actions/upload-artifact@v7
+        with:
+          name: validation-pdfs
+          path: target/validation-pdfs/
+          if-no-files-found: error
+
+  verapdf:
+    name: veraPDF (PDF/UA-1, PDF/A-3u)
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      # Pinned so a new veraPDF release cannot break PRs unexpectedly; bump deliberately
+      VERAPDF_IMAGE: verapdf/cli:v1.30.4
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: validation-pdfs
+          path: validation-pdfs
+
+      - name: Validate PDFs
+        run: manual-testing/validate-pdf.sh validation-pdfs/*.pdf

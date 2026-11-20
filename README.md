@@ -62,6 +62,86 @@ php test.php data/large-doc/
 Uploads are split into several requests to stay within the service's multipart limits.
 Make sure the service has enough heap and disk space for the rendering.
 
+## Validating PDFs with veraPDF
+The service produces PDF/A-3u documents with PDF/UA-1 (accessibility) tagging.
+[veraPDF](https://verapdf.org) is the reference validator for both standards. It runs in Docker,
+so nothing needs to be installed besides Docker itself.
+
+### Using the script
+`manual-testing/validate-pdf.sh` checks each given PDF against PDF/UA-1 and PDF/A-3u:
+```bash
+cd manual-testing
+php test.php data/a11y-attachments/        # render a sample document (service must be running)
+./validate-pdf.sh data/a11y-attachments/a11y-attachments.pdf data/doc1/doc1.pdf
+```
+Output for a valid file:
+```
+PASS /data/a11y-attachments.pdf ua1
+PASS /data/a11y-attachments.pdf 3u
+```
+For an invalid file, the failed rules are listed below the `FAIL` line, e.g. `FAIL 7.18.1-1`.
+The script exits with `1` if any check fails, so it can be used in scripts and CI.
+It uses `verapdf/cli:latest`; set `VERAPDF_IMAGE` to use a specific version:
+```bash
+VERAPDF_IMAGE=verapdf/cli:v1.30.4 ./validate-pdf.sh some.pdf
+```
+
+### Using veraPDF directly
+The PDF's directory is mounted into the container as `/data`:
+```bash
+# PDF/UA-1, with a list of the failed rules
+docker run --rm -v "$PWD:/data:ro" verapdf/cli:latest --flavour ua1 --format text --verbose /data/file.pdf
+
+# PDF/A-3u
+docker run --rm -v "$PWD:/data:ro" verapdf/cli:latest --flavour 3u --format text --verbose /data/file.pdf
+
+# Full report with the location of every failed check (object numbers, operators, ...)
+docker run --rm -v "$PWD:/data:ro" verapdf/cli:latest --flavour ua1 --format json /data/file.pdf > report.json
+```
+Useful options:
+| Option | Meaning |
+|---|---|
+| `--flavour ua1` / `ua2` | PDF/UA-1 / PDF/UA-2 |
+| `--flavour 3u` / `3a` / `3b` | PDF/A-3 conformance levels; the service targets `3u` |
+| `--format text\|xml\|json\|html` | Report format (default `xml`) |
+| `--verbose` | Lists failed rules in `text` output |
+| `--maxfailuresdisplayed N` | Number of failed checks reported per rule (`-1` for all) |
+
+Each failed rule is identified by the clause of the standard and a test number, e.g. `7.18.1-1`
+(PDF/UA-1, clause 7.18.1: annotations must be nested in `Annot` structure elements). The rules are
+documented in the [veraPDF rule reference](https://docs.verapdf.org/validation/); the `context` in
+the JSON/XML report points to the offending PDF object.
+
+### Sample documents
+The checked-in documents in `manual-testing/data/` are expected to `PASS` both profiles.
+`data/a11y-attachments/` covers embedded file attachments, links, images with alternative text,
+data tables and transparency.
+
+The tests can render them without a running service. Pass an output directory and
+validate the result:
+```bash
+./mvnw verify -Dhtml2pdf.pdf-output-dir="$PWD/target/validation-pdfs"
+manual-testing/validate-pdf.sh target/validation-pdfs/*.pdf
+```
+
+### Continuous integration
+The [CI workflow](.github/workflows/ci.yml) runs on every pull request and on pushes to `main`:
+1. **Tests**: builds the service with Java 25 and runs all tests. The sample documents are
+	rendered and uploaded as the `validation-pdfs` workflow artifact.
+2. **veraPDF**: validates those PDFs with `manual-testing/validate-pdf.sh` using a pinned veraPDF
+	image (`VERAPDF_IMAGE` in the workflow; bump it deliberately).
+
+If the veraPDF job fails, download the `validation-pdfs` artifact from the workflow run and use
+the commands above to investigate.
+
+## Accessibility post-processing
+PDFs are rendered as PDF/A-3u with PDF/UA tagging. To make the output pass validation, the service
+- embeds an sRGB OutputIntent (required by PDF/A for any RGB color),
+- adds an `AFRelationship` and MIME type to every `<a download>` link that does not specify one,
+- nests file attachment annotations in `Annot` structure elements instead of `Link` elements
+	(see [openhtmltopdf#66](https://github.com/openhtmltopdf/openhtmltopdf/issues/66)) and sets
+	their `/Contents`. This runs only for documents that contain attachments.
+
 ## Liveness probing and version check
 To check if the service is responsive one can execute a HTTP request against the `servlet.context-path` (default `/Html2PDF/v1/`)
 
