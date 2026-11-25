@@ -154,18 +154,15 @@ docker run -p 8080:8080 -e APP_PATH=/BShtml2PDF webservice-htmlpdf
 ## TODO
 * Implement proper support for custom fonts (e.g. from inline CSS)
 
-## Creating Releases
+## Versioning and releases
 
-To create a new release, please update the version number in this file and in
-`pom.xml`. As soon as this change is merged, build the `.jar` file
-from within the `main` branch:
+`<version>` in `pom.xml` is the version of the *next* release, without `-SNAPSHOT`,
+e.g. `2.2.6` after `2.2.5` was released. It is reported at `GET /` (`version`).
 
-```
-docker build -t webservice-pdf-release-builder .
-docker run --rm --detach --name webservice-pdf-release webservice-pdf-release-builder
-docker cp webservice-pdf-release:/app/html2pdf.jar /tmp/
-docker stop webservice-pdf-release
-sha256sum /tmp/html2pdf.jar
-```
+Daily builds are made from this repository by the BlueSpice release engineering
+(`releng-builder`) and pushed to a build repository. They are told apart by `buildId`
+(the git commit of this repository) and `buildTime`.
 
-Then append `/tmp/html2pdf.jar` and its hash sum to the new release on Github.
+A release is made from one of these daily builds, the `.jar` file is not built again:
+the commit is tagged with the version, the `.jar` file and its hash sum are attached to a
+GitHub release, and `<version>` in `pom.xml` is increased to the next version.
