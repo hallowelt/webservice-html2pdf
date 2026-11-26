@@ -1,0 +1,1 @@
+Plain text attachment used by the a11y-attachments manual test.
